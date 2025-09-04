@@ -358,7 +358,18 @@ class TranscriptModal extends Modal {
 				model: 'gpt-4o',
 				messages: [{
 					role: 'user',
-					content: `Please summarize the following meeting transcript into key points and action items:\n\n${this.transcript}`
+					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary that includes:
+
+1. **Main Topics Discussed**: What were the primary subjects covered?
+2. **Key Points**: The most important information shared
+3. **Decisions Made**: Any conclusions or agreements reached
+4. **Action Items**: Tasks or next steps identified (if any)
+5. **Context & Insights**: Important context or insights that emerged
+
+Please format your response clearly and focus on extracting meaningful content from the discussion.
+
+**Transcript:**
+${this.transcript}`
 				}],
 				max_tokens: 500,
 				temperature: 0.3
@@ -682,9 +693,20 @@ class RecordingView extends ItemView {
 				model: 'gpt-4o',
 				messages: [{
 					role: 'user',
-					content: `Please summarize the following meeting transcript into key points and action items:\n\n${transcript}`
+					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary that includes:
+
+1. **Main Topics Discussed**: What were the primary subjects covered?
+2. **Key Points**: The most important information shared
+3. **Decisions Made**: Any conclusions or agreements reached
+4. **Action Items**: Tasks or next steps identified (if any)
+5. **Context & Insights**: Important context or insights that emerged
+
+Please format your response clearly and focus on extracting meaningful content from the discussion.
+
+**Transcript:**
+${transcript}`
 				}],
-				max_tokens: 500,
+				max_tokens: 800,
 				temperature: 0.3
 			})
 		});
