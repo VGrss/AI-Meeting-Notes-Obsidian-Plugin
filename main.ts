@@ -18,9 +18,107 @@ const DEFAULT_SETTINGS: VoiceNotesSettings = {
 
 const RECORDING_VIEW_TYPE = 'voice-recording-view';
 
+class OpenAIService {
+	private apiKey: string;
+
+	constructor(apiKey: string) {
+		this.apiKey = apiKey;
+	}
+
+	async transcribeAudio(audioBlob: Blob): Promise<string> {
+		if (!this.apiKey) {
+			throw new Error('OpenAI API key not configured');
+		}
+
+		const formData = new FormData();
+		formData.append('file', audioBlob, 'recording.wav');
+		formData.append('model', 'whisper-1');
+
+		const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${this.apiKey}`,
+			},
+			body: formData
+		});
+
+		if (!response.ok) {
+			throw new Error(`Transcription failed: ${response.statusText}`);
+		}
+
+		const result = await response.json();
+		return result.text;
+	}
+
+	async generateSummary(transcript: string): Promise<string> {
+		if (!this.apiKey) {
+			throw new Error('OpenAI API key not configured');
+		}
+
+		const response = await fetch('https://api.openai.com/v1/chat/completions', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${this.apiKey}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				model: 'gpt-4o',
+				messages: [{
+					role: 'user',
+					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary that includes:
+
+1. **Main Topics Discussed**: What were the primary subjects covered?
+2. **Key Points**: The most important information shared
+3. **Decisions Made**: Any conclusions or agreements reached
+4. **Action Items**: Tasks or next steps identified (if any)
+5. **Context & Insights**: Important context or insights that emerged
+
+Please format your response clearly and focus on extracting meaningful content from the discussion.
+
+**Transcript:**
+${transcript}`
+				}],
+				max_tokens: 800,
+				temperature: 0.3
+			})
+		});
+
+		if (!response.ok) {
+			throw new Error(`Summary generation failed: ${response.statusText}`);
+		}
+
+		const result = await response.json();
+		return result.choices[0].message.content;
+	}
+}
+
+class NoteHelper {
+	static insertTextIntoNote(app: App, text: string) {
+		const activeView = app.workspace.getActiveViewOfType(MarkdownView);
+		
+		if (activeView) {
+			const editor = activeView.editor;
+			const cursor = editor.getCursor();
+			editor.replaceRange(text + '\n\n', cursor);
+			new Notice('Text inserted into current note');
+		} else {
+			app.workspace.openLinkText('Voice Recording - ' + new Date().toLocaleString(), '', true)
+				.then(() => {
+					setTimeout(() => {
+						const newActiveView = app.workspace.getActiveViewOfType(MarkdownView);
+						if (newActiveView) {
+							const editor = newActiveView.editor;
+							editor.setValue(text);
+							new Notice('New note created with content');
+						}
+					}, 100);
+				});
+		}
+	}
+}
+
 export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
-	recorder: VoiceRecorder | null = null;
 	statusBarItem: HTMLElement;
 	recordings: RecordingData[] = [];
 
@@ -65,9 +163,6 @@ export default class VoiceNotesPlugin extends Plugin {
 	}
 
 	onunload() {
-		if (this.recorder) {
-			this.recorder.stop();
-		}
 	}
 
 	openRecordingModal() {
@@ -252,34 +347,12 @@ class RecordingModal extends Modal {
 
 	async processRecording(audioBlob: Blob) {
 		try {
-			const transcript = await this.transcribeAudio(audioBlob);
+			const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey);
+			const transcript = await openaiService.transcribeAudio(audioBlob);
 			new TranscriptModal(this.app, this.plugin, transcript).open();
 		} catch (error) {
 			new Notice('Transcription failed: ' + error.message);
 		}
-	}
-
-	async transcribeAudio(audioBlob: Blob): Promise<string> {
-		const { openaiApiKey } = this.plugin.settings;
-		
-		if (!openaiApiKey) {
-			throw new Error('OpenAI API key not configured');
-		}
-
-		const formData = new FormData();
-		formData.append('file', audioBlob, 'recording.wav');
-		formData.append('model', 'whisper-1');
-
-		const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${openaiApiKey}`,
-			},
-			body: formData
-		});
-
-		const result = await response.json();
-		return result.text;
 	}
 
 	onClose() {
@@ -354,62 +427,13 @@ class TranscriptModal extends Modal {
 	}
 
 	async generateSummary(): Promise<string> {
-		const response = await fetch('https://api.openai.com/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${this.plugin.settings.openaiApiKey}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				model: 'gpt-4o',
-				messages: [{
-					role: 'user',
-					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary that includes:
-
-1. **Main Topics Discussed**: What were the primary subjects covered?
-2. **Key Points**: The most important information shared
-3. **Decisions Made**: Any conclusions or agreements reached
-4. **Action Items**: Tasks or next steps identified (if any)
-5. **Context & Insights**: Important context or insights that emerged
-
-Please format your response clearly and focus on extracting meaningful content from the discussion.
-
-**Transcript:**
-${this.transcript}`
-				}],
-				max_tokens: 500,
-				temperature: 0.3
-			})
-		});
-
-		const result = await response.json();
-		return result.choices[0].message.content;
+		const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey);
+		return await openaiService.generateSummary(this.transcript);
 	}
 
 	insertIntoNote() {
-		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		
-		if (activeView) {
-			const editor = activeView.editor;
-			const content = this.formatContent();
-			editor.replaceSelection(content);
-			new Notice('Transcript inserted into current note');
-			this.close();
-		} else {
-			// Create new note
-			this.app.workspace.openLinkText('Voice Meeting Notes - ' + new Date().toLocaleString(), '', true)
-				.then(() => {
-					setTimeout(() => {
-						const newActiveView = this.app.workspace.getActiveViewOfType(MarkdownView);
-						if (newActiveView) {
-							const editor = newActiveView.editor;
-							editor.setValue(this.formatContent());
-							new Notice('New note created with transcript');
-							this.close();
-						}
-					}, 100);
-				});
-		}
+		NoteHelper.insertTextIntoNote(this.app, this.formatContent());
+		this.close();
 	}
 
 	copyToClipboard() {
@@ -442,8 +466,6 @@ class RecordingView extends ItemView {
 	isPaused = false;
 	recordingTime = 0;
 	timeInterval: NodeJS.Timeout | null = null;
-	transcript = '';
-	summary = '';
 
 	constructor(leaf: WorkspaceLeaf, plugin: VoiceNotesPlugin) {
 		super(leaf);
@@ -515,35 +537,10 @@ class RecordingView extends ItemView {
 		historyContainer.createEl('h4', { text: 'Recording History' });
 		const historyListEl = historyContainer.createDiv('recordings-list');
 
-		
-		startBtn.addEventListener('click', (e) => {
-				this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
-		});
-		
-		startBtn.onclick = (e) => {
-				this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
-		};
-		
-		// Test if button is responsive at all
-		
-		// Force button to be clickable
-		startBtn.style.pointerEvents = 'auto';
-		startBtn.style.cursor = 'pointer';
-		startBtn.disabled = false;
-		
-		// Add a simple test click handler
-		
-		pauseBtn.addEventListener('click', () => {
-			this.pauseRecording(pauseBtn, timeEl);
-		});
-		
-		stopBtn.addEventListener('click', () => {
-			this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl, timeEl);
-		});
-		
-		closeBtn.addEventListener('click', () => {
-			this.leaf.detach();
-		});
+		startBtn.onclick = () => this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
+		pauseBtn.onclick = () => this.pauseRecording(pauseBtn, timeEl);
+		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl, timeEl);
+		closeBtn.onclick = () => this.leaf.detach();
 		
 		this.refreshRecordingHistory(historyListEl);
 	}
@@ -611,8 +608,9 @@ class RecordingView extends ItemView {
 			new Notice('Recording complete. Processing...');
 			
 			try {
-				const transcript = await this.transcribeAudio(audioBlob);
-				const summary = await this.generateSummaryText(transcript);
+				const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey);
+				const transcript = await openaiService.transcribeAudio(audioBlob);
+				const summary = await openaiService.generateSummary(transcript);
 				
 				const recording: RecordingData = {
 					id: Date.now().toString(),
@@ -651,66 +649,6 @@ class RecordingView extends ItemView {
 		}
 	}
 
-	async transcribeAudio(audioBlob: Blob): Promise<string> {
-		const { openaiApiKey } = this.plugin.settings;
-		
-		if (!openaiApiKey) {
-			throw new Error('OpenAI API key not configured');
-		}
-
-		const formData = new FormData();
-		formData.append('file', audioBlob, 'recording.wav');
-		formData.append('model', 'whisper-1');
-
-		const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${openaiApiKey}`,
-			},
-			body: formData
-		});
-
-		const result = await response.json();
-		return result.text;
-	}
-
-
-	async generateSummaryText(transcript: string): Promise<string> {
-		if (!this.plugin.settings.openaiApiKey) {
-			throw new Error('OpenAI API key not configured');
-		}
-
-		const response = await fetch('https://api.openai.com/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${this.plugin.settings.openaiApiKey}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				model: 'gpt-4o',
-				messages: [{
-					role: 'user',
-					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary that includes:
-
-1. **Main Topics Discussed**: What were the primary subjects covered?
-2. **Key Points**: The most important information shared
-3. **Decisions Made**: Any conclusions or agreements reached
-4. **Action Items**: Tasks or next steps identified (if any)
-5. **Context & Insights**: Important context or insights that emerged
-
-Please format your response clearly and focus on extracting meaningful content from the discussion.
-
-**Transcript:**
-${transcript}`
-				}],
-				max_tokens: 800,
-				temperature: 0.3
-			})
-		});
-
-		const result = await response.json();
-		return result.choices[0].message.content;
-	}
 
 	refreshRecordingHistory(historyListEl: HTMLElement) {
 		historyListEl.empty();
@@ -741,8 +679,44 @@ ${transcript}`
 			cls: 'recording-duration'
 		});
 
-		const transcriptSection = card.createDiv('transcript-section');
-		transcriptSection.createEl('h5', { text: '📝 Transcript' });
+		// Tab navigation
+		const tabContainer = card.createDiv('tab-container');
+		const tabHeaders = tabContainer.createDiv('tab-headers');
+		
+		const summaryTab = tabHeaders.createEl('button', {
+			text: '🤖 AI Summary',
+			cls: 'tab-header active'
+		});
+		const transcriptTab = tabHeaders.createEl('button', {
+			text: '📝 Transcript', 
+			cls: 'tab-header'
+		});
+
+		// Tab content containers
+		const tabContent = tabContainer.createDiv('tab-content');
+		
+		// Summary tab content (default visible)
+		const summarySection = tabContent.createDiv('tab-panel active');
+		const summaryEl = summarySection.createEl('textarea', {
+			attr: { readonly: 'true', rows: '4' },
+			cls: 'card-text'
+		});
+		summaryEl.value = recording.summary;
+		
+		const summaryActions = summarySection.createDiv('text-actions');
+		const summaryCopyBtn = summaryActions.createEl('button', { 
+			text: '📋',
+			cls: 'action-btn',
+			attr: { title: 'Copy summary to clipboard' }
+		});
+		const summaryInsertBtn = summaryActions.createEl('button', { 
+			text: '📄',
+			cls: 'action-btn',
+			attr: { title: 'Insert summary into note' }
+		});
+
+		// Transcript tab content (initially hidden)
+		const transcriptSection = tabContent.createDiv('tab-panel');
 		const transcriptEl = transcriptSection.createEl('textarea', {
 			attr: { readonly: 'true', rows: '4' },
 			cls: 'card-text'
@@ -761,26 +735,22 @@ ${transcript}`
 			attr: { title: 'Insert transcript into note' }
 		});
 
-		const summarySection = card.createDiv('summary-section');
-		summarySection.createEl('h5', { text: '🤖 AI Summary' });
-		const summaryEl = summarySection.createEl('textarea', {
-			attr: { readonly: 'true', rows: '3' },
-			cls: 'card-text'
-		});
-		summaryEl.value = recording.summary;
+		// Tab switching logic
+		summaryTab.onclick = () => {
+			summaryTab.addClass('active');
+			transcriptTab.removeClass('active');
+			summarySection.addClass('active');
+			transcriptSection.removeClass('active');
+		};
 		
-		const summaryActions = summarySection.createDiv('text-actions');
-		const summaryCopyBtn = summaryActions.createEl('button', { 
-			text: '📋',
-			cls: 'action-btn',
-			attr: { title: 'Copy summary to clipboard' }
-		});
-		const summaryInsertBtn = summaryActions.createEl('button', { 
-			text: '📄',
-			cls: 'action-btn',
-			attr: { title: 'Insert summary into note' }
-		});
+		transcriptTab.onclick = () => {
+			transcriptTab.addClass('active');
+			summaryTab.removeClass('active');
+			transcriptSection.addClass('active');
+			summarySection.removeClass('active');
+		};
 
+		// Action handlers
 		transcriptCopyBtn.onclick = () => {
 			navigator.clipboard.writeText(recording.transcript);
 			new Notice('Transcript copied to clipboard');
@@ -797,26 +767,7 @@ ${transcript}`
 	}
 
 	insertTextIntoNote(text: string) {
-		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		
-		if (activeView) {
-			const editor = activeView.editor;
-			const cursor = editor.getCursor();
-			editor.replaceRange(text + '\n\n', cursor);
-			new Notice('Text inserted into current note');
-		} else {
-			this.app.workspace.openLinkText('Voice Recording - ' + new Date().toLocaleString(), '', true)
-				.then(() => {
-					setTimeout(() => {
-						const newActiveView = this.app.workspace.getActiveViewOfType(MarkdownView);
-						if (newActiveView) {
-							const editor = newActiveView.editor;
-							editor.setValue(text);
-							new Notice('New note created with content');
-						}
-					}, 100);
-				});
-		}
+		NoteHelper.insertTextIntoNote(this.app, text);
 	}
 
 	async onClose() {

@@ -285,3 +285,72 @@
 	font-size: var(--font-ui-smaller);
 	margin-top: 10px;
 }
+
+/* Tab System for Recording Cards */
+.tab-container {
+    width: 100%;
+}
+
+.tab-headers {
+    display: flex;
+    border-bottom: 1px solid var(--background-modifier-border);
+    margin-bottom: 8px;
+}
+
+.tab-header {
+    flex: 1;
+    padding: 6px 12px;
+    border: none;
+    background: var(--background-secondary);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: var(--font-ui-smaller);
+    border-radius: 0;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.tab-header:hover {
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.tab-header.active {
+    background: var(--background-primary);
+    color: var(--text-accent);
+    border-bottom-color: var(--text-accent);
+    font-weight: 500;
+}
+
+.tab-header:first-child {
+    border-top-left-radius: 4px;
+}
+
+.tab-header:last-child {
+    border-top-right-radius: 4px;
+}
+
+.tab-content {
+    position: relative;
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+.recording-timestamp {
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.recording-duration {
+    font-size: 0.8em;
+    color: var(--text-accent);
+    background: var(--background-modifier-border);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
