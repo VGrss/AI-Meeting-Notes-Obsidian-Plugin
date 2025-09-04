@@ -164,7 +164,7 @@ class RecordingModal extends Modal {
 		});
 
 		startBtn.onclick = () => this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
-		pauseBtn.onclick = () => this.pauseRecording(pauseBtn);
+		pauseBtn.onclick = () => this.pauseRecording(pauseBtn, timeEl);
 		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn, timeEl);
 	}
 
@@ -186,7 +186,17 @@ class RecordingModal extends Modal {
 			} catch (error) {
 				new Notice('Failed to start recording: ' + error.message);
 			}
-		} else if (this.isPaused && this.recorder) {
+		}
+	}
+
+	pauseRecording(pauseBtn: HTMLButtonElement, timeEl: HTMLElement) {
+		if (this.recorder && !this.isPaused) {
+			this.recorder.pause();
+			this.isPaused = true;
+			pauseBtn.textContent = '▶️ Resume';
+			this.stopTimer();
+			new Notice('Recording paused');
+		} else if (this.recorder && this.isPaused) {
 			this.recorder.resume();
 			this.isPaused = false;
 			pauseBtn.textContent = '⏸️ Pause';
@@ -195,25 +205,13 @@ class RecordingModal extends Modal {
 		}
 	}
 
-	pauseRecording(pauseBtn: HTMLButtonElement) {
-		if (this.recorder && !this.isPaused) {
-			this.recorder.pause();
-			this.isPaused = true;
-			pauseBtn.textContent = '▶️ Resume';
-			this.stopTimer();
-			new Notice('Recording paused');
-		}
-	}
-
 	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
 		if (this.recorder) {
-			console.log('Modal - Before stop - recording time:', this.recordingTime);
-			
+				
 			// Stop timer and reset display FIRST
 			this.stopTimer();
 			this.recordingTime = 0;
 			timeEl.textContent = '00:00';
-			console.log('Modal - Timer stopped and reset immediately');
 			
 			const audioBlob = await this.recorder.stop();
 			this.isRecording = false;
@@ -236,26 +234,19 @@ class RecordingModal extends Modal {
 		// Clear any existing timer first
 		this.stopTimer();
 		
-		console.log('Starting timer, initial recording time:', this.recordingTime);
 		this.timeInterval = setInterval(() => {
 			this.recordingTime++;
 			const minutes = Math.floor(this.recordingTime / 60);
 			const seconds = this.recordingTime % 60;
 			const display = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 			timeEl.textContent = display;
-			console.log('Timer tick:', this.recordingTime, 'display:', display);
 		}, 1000);
-		console.log('Timer started with interval:', this.timeInterval);
 	}
 
 	stopTimer() {
-		console.log('Stopping timer, current interval:', this.timeInterval);
 		if (this.timeInterval) {
 			clearInterval(this.timeInterval);
 			this.timeInterval = null;
-			console.log('Timer interval cleared');
-		} else {
-			console.log('No timer interval to clear');
 		}
 	}
 
@@ -474,7 +465,6 @@ class RecordingView extends ItemView {
 	async onOpen() {
 		const container = this.containerEl.children[1];
 		container.empty();
-		console.log('RecordingView onOpen called, container:', container);
 		
 		const headerEl = container.createDiv('panel-header');
 		headerEl.createEl('h4', { text: 'AI Voice Recording' });
@@ -525,21 +515,16 @@ class RecordingView extends ItemView {
 		historyContainer.createEl('h4', { text: 'Recording History' });
 		const historyListEl = historyContainer.createDiv('recordings-list');
 
-		console.log('Setting up Start button event listener, button element:', startBtn);
 		
 		startBtn.addEventListener('click', (e) => {
-			console.log('Start button clicked via addEventListener', e);
-			this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
+				this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
 		});
 		
 		startBtn.onclick = (e) => {
-			console.log('Start button clicked via onclick', e);
-			this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
+				this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
 		};
 		
 		// Test if button is responsive at all
-		startBtn.onmousedown = () => console.log('Start button mousedown');
-		startBtn.onmouseup = () => console.log('Start button mouseup');
 		
 		// Force button to be clickable
 		startBtn.style.pointerEvents = 'auto';
@@ -547,22 +532,16 @@ class RecordingView extends ItemView {
 		startBtn.disabled = false;
 		
 		// Add a simple test click handler
-		setTimeout(() => {
-			console.log('Button after setup - disabled:', startBtn.disabled, 'style:', startBtn.style.cssText);
-		}, 100);
 		
 		pauseBtn.addEventListener('click', () => {
-			console.log('Pause button clicked');
-			this.pauseRecording(pauseBtn);
+			this.pauseRecording(pauseBtn, timeEl);
 		});
 		
 		stopBtn.addEventListener('click', () => {
-			console.log('Stop button clicked');
 			this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl, timeEl);
 		});
 		
 		closeBtn.addEventListener('click', () => {
-			console.log('Close button clicked - using addEventListener');
 			this.leaf.detach();
 		});
 		
@@ -570,11 +549,9 @@ class RecordingView extends ItemView {
 	}
 
 	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
-		console.log('RecordingView startRecording called, isRecording:', this.isRecording);
 		
 		if (!this.isRecording) {
 			try {
-				console.log('Creating new VoiceRecorder...');
 				this.recorder = new VoiceRecorder();
 				await this.recorder.start();
 				this.isRecording = true;
@@ -587,13 +564,20 @@ class RecordingView extends ItemView {
 
 				this.startTimer(timeEl);
 				new Notice('Recording started');
-				console.log('Recording started successfully');
 			} catch (error) {
-				console.error('Recording failed:', error);
 				new Notice('Failed to start recording: ' + error.message);
 			}
-		} else if (this.isPaused && this.recorder) {
-			console.log('Resuming paused recording...');
+		}
+	}
+
+	pauseRecording(pauseBtn: HTMLButtonElement, timeEl: HTMLElement) {
+		if (this.recorder && !this.isPaused) {
+			this.recorder.pause();
+			this.isPaused = true;
+			pauseBtn.textContent = '▶️ Resume';
+			this.stopTimer();
+			new Notice('Recording paused');
+		} else if (this.recorder && this.isPaused) {
 			this.recorder.resume();
 			this.isPaused = false;
 			pauseBtn.textContent = '⏸️ Pause';
@@ -602,19 +586,8 @@ class RecordingView extends ItemView {
 		}
 	}
 
-	pauseRecording(pauseBtn: HTMLButtonElement) {
-		if (this.recorder && !this.isPaused) {
-			this.recorder.pause();
-			this.isPaused = true;
-			pauseBtn.textContent = '▶️ Resume';
-			this.stopTimer();
-			new Notice('Recording paused');
-		}
-	}
-
 	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, historyListEl: HTMLElement, timeEl: HTMLElement) {
 		if (this.recorder) {
-			console.log('Before stop - recording time:', this.recordingTime);
 			
 			// Save duration BEFORE stopping timer
 			const recordingDuration = this.recordingTime;
@@ -623,7 +596,6 @@ class RecordingView extends ItemView {
 			this.stopTimer();
 			this.recordingTime = 0;
 			timeEl.textContent = '00:00';
-			console.log('Timer stopped and reset immediately, saved duration:', recordingDuration);
 			
 			const audioBlob = await this.recorder.stop();
 			
@@ -663,26 +635,19 @@ class RecordingView extends ItemView {
 		// Clear any existing timer first
 		this.stopTimer();
 		
-		console.log('Starting timer, initial recording time:', this.recordingTime);
 		this.timeInterval = setInterval(() => {
 			this.recordingTime++;
 			const minutes = Math.floor(this.recordingTime / 60);
 			const seconds = this.recordingTime % 60;
 			const display = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 			timeEl.textContent = display;
-			console.log('Timer tick:', this.recordingTime, 'display:', display);
 		}, 1000);
-		console.log('Timer started with interval:', this.timeInterval);
 	}
 
 	stopTimer() {
-		console.log('Stopping timer, current interval:', this.timeInterval);
 		if (this.timeInterval) {
 			clearInterval(this.timeInterval);
 			this.timeInterval = null;
-			console.log('Timer interval cleared');
-		} else {
-			console.log('No timer interval to clear');
 		}
 	}
 
@@ -854,7 +819,6 @@ ${transcript}`
 		}
 	}
 
-
 	async onClose() {
 		if (this.recorder) {
 			await this.recorder.stop();
@@ -870,15 +834,12 @@ class VoiceRecorder {
 
 	async start(): Promise<void> {
 		try {
-			console.log('VoiceRecorder: Checking microphone permissions...');
 			
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 				throw new Error('getUserMedia not supported in this browser');
 			}
 			
-			console.log('VoiceRecorder: Requesting microphone access...');
 			this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-			console.log('VoiceRecorder: Microphone access granted');
 			
 			this.mediaRecorder = new MediaRecorder(this.stream);
 			this.chunks = [];
@@ -890,9 +851,7 @@ class VoiceRecorder {
 			};
 
 			this.mediaRecorder.start();
-			console.log('VoiceRecorder: MediaRecorder started');
 		} catch (error) {
-			console.error('VoiceRecorder: Failed to start:', error);
 			if (error.name === 'NotAllowedError') {
 				throw new Error('Microphone access denied. Please allow microphone permissions.');
 			} else if (error.name === 'NotFoundError') {
