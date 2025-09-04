@@ -207,6 +207,14 @@ class RecordingModal extends Modal {
 
 	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
 		if (this.recorder) {
+			console.log('Modal - Before stop - recording time:', this.recordingTime);
+			
+			// Stop timer and reset display FIRST
+			this.stopTimer();
+			this.recordingTime = 0;
+			timeEl.textContent = '00:00';
+			console.log('Modal - Timer stopped and reset immediately');
+			
 			const audioBlob = await this.recorder.stop();
 			this.isRecording = false;
 			this.isPaused = false;
@@ -216,10 +224,6 @@ class RecordingModal extends Modal {
 			stopBtn.disabled = true;
 			startBtn.textContent = '🎙️ Start Recording';
 			pauseBtn.textContent = '⏸️ Pause';
-			
-			this.stopTimer();
-			this.recordingTime = 0;
-			timeEl.textContent = '00:00'; // Reset timer display
 			
 			new Notice('Recording complete. Processing...');
 			this.close();
@@ -599,8 +603,16 @@ class RecordingView extends ItemView {
 
 	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, historyListEl: HTMLElement, timeEl: HTMLElement) {
 		if (this.recorder) {
-			const audioBlob = await this.recorder.stop();
+			console.log('Before stop - recording time:', this.recordingTime);
+			
+			// Stop timer and reset display FIRST
+			this.stopTimer();
 			const recordingDuration = this.recordingTime; // Save duration before reset
+			this.recordingTime = 0;
+			timeEl.textContent = '00:00';
+			console.log('Timer stopped and reset immediately');
+			
+			const audioBlob = await this.recorder.stop();
 			
 			this.isRecording = false;
 			this.isPaused = false;
@@ -610,10 +622,6 @@ class RecordingView extends ItemView {
 			stopBtn.disabled = true;
 			startBtn.textContent = '🎙️ Start Recording';
 			pauseBtn.textContent = '⏸️ Pause';
-			
-			this.stopTimer();
-			this.recordingTime = 0;
-			timeEl.textContent = '00:00'; // Reset timer display
 			
 			new Notice('Recording complete. Processing...');
 			
