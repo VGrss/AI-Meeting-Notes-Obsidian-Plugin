@@ -342,9 +342,10 @@
     display: block;
 }
 
-.recording-timestamp {
-    font-size: 0.9em;
-    color: var(--text-muted);
+.recording-topic {
+    font-size: 0.95em;
+    color: var(--text-accent);
+    font-weight: 500;
 }
 
 .recording-duration {

@@ -10,6 +10,7 @@ interface RecordingData {
 	duration: number;
 	transcript: string;
 	summary: string;
+	topic: string;
 }
 
 const DEFAULT_SETTINGS: VoiceNotesSettings = {
@@ -90,38 +91,43 @@ ${transcript}`
 		const result = await response.json();
 		return result.choices[0].message.content;
 	}
-}
 
-class NoteHelper {
-	static async insertTextIntoNote(app: App, text: string) {
-		const activeView = app.workspace.getActiveViewOfType(MarkdownView);
-		
-		if (activeView) {
-			const editor = activeView.editor;
-			const cursor = editor.getCursor();
-			editor.replaceRange(text + '\n\n', cursor);
-			new Notice('Text inserted into current note');
-		} else {
-			try {
-				await app.workspace.openLinkText('Voice Recording - ' + new Date().toLocaleString(), '', true);
-				
-				// Wait a bit for the new note to be created
-				await new Promise(resolve => setTimeout(resolve, 200));
-				
-				const newActiveView = app.workspace.getActiveViewOfType(MarkdownView);
-				if (newActiveView) {
-					const editor = newActiveView.editor;
-					editor.setValue(text);
-					new Notice('New note created with content');
-				} else {
-					new Notice('Failed to create new note');
-				}
-			} catch (error) {
-				new Notice('Failed to insert text: ' + error.message);
-			}
+	async generateTopic(transcript: string): Promise<string> {
+		if (!this.apiKey) {
+			throw new Error('OpenAI API key not configured');
 		}
+
+		const response = await fetch('https://api.openai.com/v1/chat/completions', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${this.apiKey}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				model: 'gpt-4o',
+				messages: [{
+					role: 'user',
+					content: `Based on this voice recording transcript, provide a very short 2-word topic summary that captures the main subject discussed. Use the same language as the transcript.
+
+Examples: "Project Planning", "Team Meeting", "Client Call", "Budget Review"
+
+**Transcript:**
+${transcript}`
+				}],
+				max_tokens: 10,
+				temperature: 0.1
+			})
+		});
+
+		if (!response.ok) {
+			throw new Error(`Topic generation failed: ${response.statusText}`);
+		}
+
+		const result = await response.json();
+		return result.choices[0].message.content.trim();
 	}
 }
+
 
 export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
@@ -438,7 +444,28 @@ class TranscriptModal extends Modal {
 	}
 
 	async insertIntoNote() {
-		await NoteHelper.insertTextIntoNote(this.app, this.formatContent());
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		
+		if (activeView) {
+			const editor = activeView.editor;
+			const content = this.formatContent();
+			editor.replaceSelection(content);
+			new Notice('Transcript inserted into current note');
+		} else {
+			try {
+				await this.app.workspace.openLinkText('Voice Meeting Notes - ' + new Date().toLocaleString(), '', true);
+				await new Promise(resolve => setTimeout(resolve, 200));
+				
+				const newActiveView = this.app.workspace.getActiveViewOfType(MarkdownView);
+				if (newActiveView) {
+					const editor = newActiveView.editor;
+					editor.setValue(this.formatContent());
+					new Notice('New note created with transcript');
+				}
+			} catch (error) {
+				new Notice('Failed to insert transcript: ' + error.message);
+			}
+		}
 		this.close();
 	}
 
@@ -616,14 +643,18 @@ class RecordingView extends ItemView {
 			try {
 				const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey);
 				const transcript = await openaiService.transcribeAudio(audioBlob);
-				const summary = await openaiService.generateSummary(transcript);
+				const [summary, topic] = await Promise.all([
+					openaiService.generateSummary(transcript),
+					openaiService.generateTopic(transcript)
+				]);
 				
 				const recording: RecordingData = {
 					id: Date.now().toString(),
 					timestamp: new Date(),
 					duration: recordingDuration, // Use saved duration
 					transcript,
-					summary
+					summary,
+					topic
 				};
 				
 				this.plugin.addRecording(recording);
@@ -676,9 +707,9 @@ class RecordingView extends ItemView {
 		const card = container.createDiv('recording-card');
 		
 		const cardHeader = card.createDiv('card-header');
-		const timestamp = cardHeader.createEl('span', { 
-			text: recording.timestamp.toLocaleString(),
-			cls: 'recording-timestamp'
+		const topic = cardHeader.createEl('span', { 
+			text: recording.topic || 'Discussion',
+			cls: 'recording-topic'
 		});
 		const duration = cardHeader.createEl('span', { 
 			text: `${Math.floor(recording.duration / 60)}:${(recording.duration % 60).toString().padStart(2, '0')}`,
@@ -715,11 +746,6 @@ class RecordingView extends ItemView {
 			cls: 'action-btn',
 			attr: { title: 'Copy summary to clipboard' }
 		});
-		const summaryInsertBtn = summaryActions.createEl('button', { 
-			text: '↙️',
-			cls: 'action-btn',
-			attr: { title: 'Insert summary into note' }
-		});
 
 		// Transcript tab content (initially hidden)
 		const transcriptSection = tabContent.createDiv('tab-panel');
@@ -734,11 +760,6 @@ class RecordingView extends ItemView {
 			text: '📋',
 			cls: 'action-btn',
 			attr: { title: 'Copy transcript to clipboard' }
-		});
-		const transcriptInsertBtn = transcriptActions.createEl('button', { 
-			text: '↙️',
-			cls: 'action-btn',
-			attr: { title: 'Insert transcript into note' }
 		});
 
 		// Tab switching logic
@@ -762,19 +783,12 @@ class RecordingView extends ItemView {
 			new Notice('Transcript copied to clipboard');
 		};
 		
-		transcriptInsertBtn.onclick = async () => await this.insertTextIntoNote(recording.transcript);
-		
 		summaryCopyBtn.onclick = () => {
 			navigator.clipboard.writeText(recording.summary);
 			new Notice('Summary copied to clipboard');
 		};
-		
-		summaryInsertBtn.onclick = async () => await this.insertTextIntoNote(recording.summary);
 	}
 
-	async insertTextIntoNote(text: string) {
-		await NoteHelper.insertTextIntoNote(this.app, text);
-	}
 
 	async onClose() {
 		if (this.recorder) {
