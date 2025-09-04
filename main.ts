@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView } from 'obsidian';
 
 interface VoiceNotesSettings {
 	transcriptionApiKey: string;
@@ -12,6 +12,8 @@ const DEFAULT_SETTINGS: VoiceNotesSettings = {
 	transcriptionService: 'whisper'
 }
 
+const RECORDING_VIEW_TYPE = 'voice-recording-view';
+
 export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
 	recorder: VoiceRecorder | null = null;
@@ -19,17 +21,30 @@ export default class VoiceNotesPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		this.addRibbonIcon('mic', 'Start Voice Recording', (evt: MouseEvent) => {
-			this.openRecordingModal();
+		this.addRibbonIcon('mic', 'Open Voice Recording Panel', (evt: MouseEvent) => {
+			this.activateRecordingView();
 		});
 
 		this.addCommand({
-			id: 'start-recording',
-			name: 'Start Voice Recording',
+			id: 'open-recording-panel',
+			name: 'Open Voice Recording Panel',
+			callback: () => {
+				this.activateRecordingView();
+			}
+		});
+
+		this.addCommand({
+			id: 'start-recording-modal',
+			name: 'Start Voice Recording (Modal)',
 			callback: () => {
 				this.openRecordingModal();
 			}
 		});
+
+		this.registerView(
+			RECORDING_VIEW_TYPE,
+			(leaf) => new RecordingView(leaf, this)
+		);
 
 		this.addSettingTab(new VoiceNotesSettingTab(this.app, this));
 	}
@@ -42,6 +57,24 @@ export default class VoiceNotesPlugin extends Plugin {
 
 	openRecordingModal() {
 		new RecordingModal(this.app, this).open();
+	}
+
+	async activateRecordingView() {
+		const { workspace } = this.app;
+		
+		let leaf: WorkspaceLeaf | null = null;
+		const leaves = workspace.getLeavesOfType(RECORDING_VIEW_TYPE);
+		
+		if (leaves.length > 0) {
+			leaf = leaves[0];
+		} else {
+			leaf = workspace.getRightLeaf(false);
+			await leaf?.setViewState({ type: RECORDING_VIEW_TYPE, active: true });
+		}
+		
+		if (leaf) {
+			workspace.revealLeaf(leaf);
+		}
 	}
 
 	async loadSettings() {
@@ -415,6 +448,367 @@ class TranscriptModal extends Modal {
 	}
 }
 
+class RecordingView extends ItemView {
+	plugin: VoiceNotesPlugin;
+	recorder: VoiceRecorder | null = null;
+	isRecording = false;
+	isPaused = false;
+	recordingTime = 0;
+	timeInterval: NodeJS.Timeout | null = null;
+	transcript = '';
+	summary = '';
+
+	constructor(leaf: WorkspaceLeaf, plugin: VoiceNotesPlugin) {
+		super(leaf);
+		this.plugin = plugin;
+	}
+
+	getViewType(): string {
+		return RECORDING_VIEW_TYPE;
+	}
+
+	getDisplayText(): string {
+		return 'Voice Recording';
+	}
+
+	getIcon(): string {
+		return 'mic';
+	}
+
+	async onOpen() {
+		const container = this.containerEl.children[1];
+		container.empty();
+		container.createEl('h4', { text: 'AI Voice Recording' });
+
+		const statusEl = container.createDiv('recording-status');
+		const timeEl = statusEl.createEl('div', { 
+			text: '00:00', 
+			cls: 'recording-time' 
+		});
+
+		const controlsEl = container.createDiv('recording-controls');
+		
+		const startBtn = controlsEl.createEl('button', {
+			text: 'Start Recording',
+			cls: 'start-btn'
+		});
+
+		const pauseBtn = controlsEl.createEl('button', {
+			text: 'Pause',
+			cls: 'pause-btn',
+			attr: { disabled: 'true' }
+		});
+
+		const stopBtn = controlsEl.createEl('button', {
+			text: 'Stop',
+			cls: 'stop-btn',
+			attr: { disabled: 'true' }
+		});
+
+		const transcriptContainer = container.createDiv('transcript-container');
+		transcriptContainer.createEl('h4', { text: 'Live Transcript' });
+		const transcriptEl = transcriptContainer.createEl('textarea', {
+			attr: { 
+				readonly: 'true',
+				rows: '8',
+				placeholder: 'Transcript will appear here after recording...'
+			},
+			cls: 'transcript-display'
+		});
+
+		const summaryContainer = container.createDiv('summary-container');
+		summaryContainer.createEl('h4', { text: 'AI Summary' });
+		const summaryEl = summaryContainer.createEl('textarea', {
+			attr: { 
+				readonly: 'true',
+				rows: '6',
+				placeholder: 'AI summary will appear here...'
+			},
+			cls: 'summary-display'
+		});
+
+		const actionsEl = container.createDiv('actions');
+		
+		const summaryBtn = actionsEl.createEl('button', { 
+			text: 'Generate Summary',
+			attr: { disabled: 'true' }
+		});
+
+		const insertBtn = actionsEl.createEl('button', { 
+			text: 'Insert into Note',
+			attr: { disabled: 'true' }
+		});
+
+		const copyBtn = actionsEl.createEl('button', { 
+			text: 'Copy to Clipboard',
+			attr: { disabled: 'true' }
+		});
+
+		startBtn.onclick = () => this.startRecording(startBtn, pauseBtn, stopBtn, timeEl, transcriptEl, summaryEl, summaryBtn, insertBtn, copyBtn);
+		pauseBtn.onclick = () => this.pauseRecording(pauseBtn);
+		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn, transcriptEl, summaryEl, summaryBtn, insertBtn, copyBtn);
+		
+		summaryBtn.onclick = () => this.generateSummary(summaryEl, summaryBtn);
+		insertBtn.onclick = () => this.insertIntoNote();
+		copyBtn.onclick = () => this.copyToClipboard();
+	}
+
+	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement, transcriptEl: HTMLTextAreaElement, summaryEl: HTMLTextAreaElement, summaryBtn: HTMLButtonElement, insertBtn: HTMLButtonElement, copyBtn: HTMLButtonElement) {
+		if (!this.isRecording) {
+			try {
+				this.recorder = new VoiceRecorder();
+				await this.recorder.start();
+				this.isRecording = true;
+				this.isPaused = false;
+				
+				startBtn.disabled = true;
+				pauseBtn.disabled = false;
+				stopBtn.disabled = false;
+				startBtn.textContent = 'Recording...';
+
+				this.startTimer(timeEl);
+				new Notice('Recording started');
+			} catch (error) {
+				new Notice('Failed to start recording: ' + error.message);
+			}
+		} else if (this.isPaused && this.recorder) {
+			this.recorder.resume();
+			this.isPaused = false;
+			pauseBtn.textContent = 'Pause';
+			this.startTimer(timeEl);
+			new Notice('Recording resumed');
+		}
+	}
+
+	pauseRecording(pauseBtn: HTMLButtonElement) {
+		if (this.recorder && !this.isPaused) {
+			this.recorder.pause();
+			this.isPaused = true;
+			pauseBtn.textContent = 'Resume';
+			this.stopTimer();
+			new Notice('Recording paused');
+		}
+	}
+
+	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, transcriptEl: HTMLTextAreaElement, summaryEl: HTMLTextAreaElement, summaryBtn: HTMLButtonElement, insertBtn: HTMLButtonElement, copyBtn: HTMLButtonElement) {
+		if (this.recorder) {
+			const audioBlob = await this.recorder.stop();
+			this.isRecording = false;
+			this.isPaused = false;
+			
+			startBtn.disabled = false;
+			pauseBtn.disabled = true;
+			stopBtn.disabled = true;
+			startBtn.textContent = 'Start Recording';
+			pauseBtn.textContent = 'Pause';
+			
+			this.stopTimer();
+			this.recordingTime = 0;
+			
+			new Notice('Recording stopped. Processing...');
+			
+			try {
+				this.transcript = await this.transcribeAudio(audioBlob);
+				transcriptEl.value = this.transcript;
+				summaryBtn.disabled = false;
+				insertBtn.disabled = false;
+				copyBtn.disabled = false;
+				new Notice('Transcript ready!');
+			} catch (error) {
+				new Notice('Transcription failed: ' + error.message);
+			}
+		}
+	}
+
+	startTimer(timeEl: HTMLElement) {
+		this.timeInterval = setInterval(() => {
+			this.recordingTime++;
+			const minutes = Math.floor(this.recordingTime / 60);
+			const seconds = this.recordingTime % 60;
+			timeEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+		}, 1000);
+	}
+
+	stopTimer() {
+		if (this.timeInterval) {
+			clearInterval(this.timeInterval);
+			this.timeInterval = null;
+		}
+	}
+
+	async transcribeAudio(audioBlob: Blob): Promise<string> {
+		const { transcriptionService, transcriptionApiKey } = this.plugin.settings;
+		
+		if (!transcriptionApiKey) {
+			throw new Error('Transcription API key not configured');
+		}
+
+		switch (transcriptionService) {
+			case 'whisper':
+				return await this.transcribeWithWhisper(audioBlob, transcriptionApiKey);
+			case 'deepgram':
+				return await this.transcribeWithDeepgram(audioBlob, transcriptionApiKey);
+			case 'assemblyai':
+				return await this.transcribeWithAssemblyAI(audioBlob, transcriptionApiKey);
+			default:
+				throw new Error('Unknown transcription service');
+		}
+	}
+
+	async transcribeWithWhisper(audioBlob: Blob, apiKey: string): Promise<string> {
+		const formData = new FormData();
+		formData.append('file', audioBlob, 'recording.wav');
+		formData.append('model', 'whisper-1');
+
+		const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${apiKey}`,
+			},
+			body: formData
+		});
+
+		const result = await response.json();
+		return result.text;
+	}
+
+	async transcribeWithDeepgram(audioBlob: Blob, apiKey: string): Promise<string> {
+		const response = await fetch('https://api.deepgram.com/v1/listen', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Token ${apiKey}`,
+				'Content-Type': 'audio/wav'
+			},
+			body: audioBlob
+		});
+
+		const result = await response.json();
+		return result.results.channels[0].alternatives[0].transcript;
+	}
+
+	async transcribeWithAssemblyAI(audioBlob: Blob, apiKey: string): Promise<string> {
+		const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
+			method: 'POST',
+			headers: {
+				'authorization': apiKey,
+			},
+			body: audioBlob
+		});
+
+		const { upload_url } = await uploadResponse.json();
+
+		const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
+			method: 'POST',
+			headers: {
+				'authorization': apiKey,
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({
+				audio_url: upload_url
+			})
+		});
+
+		const { id } = await transcriptResponse.json();
+
+		let transcript;
+		do {
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			const pollResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
+				headers: { 'authorization': apiKey }
+			});
+			transcript = await pollResponse.json();
+		} while (transcript.status === 'processing');
+
+		return transcript.text;
+	}
+
+	async generateSummary(summaryEl: HTMLTextAreaElement, summaryBtn: HTMLButtonElement) {
+		if (!this.plugin.settings.openaiApiKey) {
+			new Notice('OpenAI API key not configured');
+			return;
+		}
+
+		summaryBtn.disabled = true;
+		summaryBtn.textContent = 'Generating...';
+
+		try {
+			const response = await fetch('https://api.openai.com/v1/chat/completions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${this.plugin.settings.openaiApiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					model: 'gpt-3.5-turbo',
+					messages: [{
+						role: 'user',
+						content: `Please summarize the following meeting transcript into key points and action items:\n\n${this.transcript}`
+					}],
+					max_tokens: 500,
+					temperature: 0.3
+				})
+			});
+
+			const result = await response.json();
+			this.summary = result.choices[0].message.content;
+			summaryEl.value = this.summary;
+			new Notice('Summary generated!');
+		} catch (error) {
+			new Notice('Failed to generate summary: ' + error.message);
+		}
+
+		summaryBtn.disabled = false;
+		summaryBtn.textContent = 'Generate Summary';
+	}
+
+	insertIntoNote() {
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		
+		if (activeView) {
+			const editor = activeView.editor;
+			const content = this.formatContent();
+			editor.replaceSelection(content);
+			new Notice('Transcript inserted into current note');
+		} else {
+			this.app.workspace.openLinkText('Voice Meeting Notes - ' + new Date().toLocaleString(), '', true)
+				.then(() => {
+					setTimeout(() => {
+						const newActiveView = this.app.workspace.getActiveViewOfType(MarkdownView);
+						if (newActiveView) {
+							const editor = newActiveView.editor;
+							editor.setValue(this.formatContent());
+							new Notice('New note created with transcript');
+						}
+					}, 100);
+				});
+		}
+	}
+
+	copyToClipboard() {
+		navigator.clipboard.writeText(this.formatContent());
+		new Notice('Transcript copied to clipboard');
+	}
+
+	formatContent(): string {
+		let content = `## Voice Meeting Notes - ${new Date().toLocaleString()}\n\n`;
+		
+		if (this.summary) {
+			content += `### Summary\n${this.summary}\n\n`;
+		}
+		
+		content += `### Raw Transcript\n${this.transcript}`;
+		
+		return content;
+	}
+
+	async onClose() {
+		if (this.recorder) {
+			await this.recorder.stop();
+		}
+		this.stopTimer();
+	}
+}
+
 class VoiceRecorder {
 	mediaRecorder: MediaRecorder | null = null;
 	stream: MediaStream | null = null;
@@ -509,7 +903,34 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.transcriptionApiKey = value;
 					await this.plugin.saveSettings();
-				}));
+				}))
+			.addExtraButton(button => {
+				const service = this.plugin.settings.transcriptionService;
+				let url = '';
+				let text = '';
+				
+				switch (service) {
+					case 'whisper':
+						url = 'https://platform.openai.com/api-keys';
+						text = 'Get OpenAI API Key';
+						break;
+					case 'deepgram':
+						url = 'https://console.deepgram.com/';
+						text = 'Get Deepgram API Key';
+						break;
+					case 'assemblyai':
+						url = 'https://www.assemblyai.com/dashboard/';
+						text = 'Get AssemblyAI API Key';
+						break;
+				}
+				
+				button
+					.setIcon('external-link')
+					.setTooltip(text)
+					.onClick(() => {
+						window.open(url, '_blank');
+					});
+			});
 
 		new Setting(containerEl)
 			.setName('OpenAI API Key')
@@ -520,6 +941,12 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.openaiApiKey = value;
 					await this.plugin.saveSettings();
+				}))
+			.addExtraButton(button => button
+				.setIcon('external-link')
+				.setTooltip('Get OpenAI API Key')
+				.onClick(() => {
+					window.open('https://platform.openai.com/api-keys', '_blank');
 				}));
 
 		containerEl.createEl('h3', { text: 'Service Recommendations' });

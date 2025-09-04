@@ -102,3 +102,65 @@
 .modal {
 	max-width: 600px;
 }
+
+/* Side Panel Styles */
+.workspace-leaf-content[data-type="voice-recording-view"] {
+	padding: 10px;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .view-content {
+	padding: 0;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] h4 {
+	margin-top: 0;
+	margin-bottom: 15px;
+	color: var(--text-accent);
+	text-align: center;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .recording-status {
+	margin-bottom: 15px;
+	padding: 15px;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .recording-time {
+	font-size: 1.5em;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .recording-controls {
+	flex-direction: column;
+	gap: 8px;
+	margin-bottom: 15px;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .recording-controls button {
+	padding: 8px 16px;
+	width: 100%;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .transcript-display,
+.workspace-leaf-content[data-type="voice-recording-view"] .summary-display {
+	width: 100%;
+	min-height: 120px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	padding: 8px;
+	color: var(--text-normal);
+	font-family: var(--font-text);
+	font-size: var(--font-text-size);
+	resize: vertical;
+	margin-bottom: 10px;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .actions {
+	flex-direction: column;
+	gap: 6px;
+}
+
+.workspace-leaf-content[data-type="voice-recording-view"] .actions button {
+	width: 100%;
+	padding: 8px 12px;
+	font-size: var(--font-ui-small);
+}
