@@ -73,7 +73,7 @@ class OpenAIService {
 4. **Action Items**: Tasks or next steps identified (if any)
 5. **Context & Insights**: Important context or insights that emerged
 
-Please format your response clearly and focus on extracting meaningful content from the discussion.
+Please format your response clearly and focus on extracting meaningful content from the discussion. Keep the same language as the transcript.
 
 **Transcript:**
 ${transcript}`
@@ -93,7 +93,7 @@ ${transcript}`
 }
 
 class NoteHelper {
-	static insertTextIntoNote(app: App, text: string) {
+	static async insertTextIntoNote(app: App, text: string) {
 		const activeView = app.workspace.getActiveViewOfType(MarkdownView);
 		
 		if (activeView) {
@@ -102,17 +102,23 @@ class NoteHelper {
 			editor.replaceRange(text + '\n\n', cursor);
 			new Notice('Text inserted into current note');
 		} else {
-			app.workspace.openLinkText('Voice Recording - ' + new Date().toLocaleString(), '', true)
-				.then(() => {
-					setTimeout(() => {
-						const newActiveView = app.workspace.getActiveViewOfType(MarkdownView);
-						if (newActiveView) {
-							const editor = newActiveView.editor;
-							editor.setValue(text);
-							new Notice('New note created with content');
-						}
-					}, 100);
-				});
+			try {
+				await app.workspace.openLinkText('Voice Recording - ' + new Date().toLocaleString(), '', true);
+				
+				// Wait a bit for the new note to be created
+				await new Promise(resolve => setTimeout(resolve, 200));
+				
+				const newActiveView = app.workspace.getActiveViewOfType(MarkdownView);
+				if (newActiveView) {
+					const editor = newActiveView.editor;
+					editor.setValue(text);
+					new Notice('New note created with content');
+				} else {
+					new Notice('Failed to create new note');
+				}
+			} catch (error) {
+				new Notice('Failed to insert text: ' + error.message);
+			}
 		}
 	}
 }
@@ -431,8 +437,8 @@ class TranscriptModal extends Modal {
 		return await openaiService.generateSummary(this.transcript);
 	}
 
-	insertIntoNote() {
-		NoteHelper.insertTextIntoNote(this.app, this.formatContent());
+	async insertIntoNote() {
+		await NoteHelper.insertTextIntoNote(this.app, this.formatContent());
 		this.close();
 	}
 
@@ -710,7 +716,7 @@ class RecordingView extends ItemView {
 			attr: { title: 'Copy summary to clipboard' }
 		});
 		const summaryInsertBtn = summaryActions.createEl('button', { 
-			text: '📄',
+			text: '↙️',
 			cls: 'action-btn',
 			attr: { title: 'Insert summary into note' }
 		});
@@ -730,7 +736,7 @@ class RecordingView extends ItemView {
 			attr: { title: 'Copy transcript to clipboard' }
 		});
 		const transcriptInsertBtn = transcriptActions.createEl('button', { 
-			text: '📄',
+			text: '↙️',
 			cls: 'action-btn',
 			attr: { title: 'Insert transcript into note' }
 		});
@@ -756,18 +762,18 @@ class RecordingView extends ItemView {
 			new Notice('Transcript copied to clipboard');
 		};
 		
-		transcriptInsertBtn.onclick = () => this.insertTextIntoNote(recording.transcript);
+		transcriptInsertBtn.onclick = async () => await this.insertTextIntoNote(recording.transcript);
 		
 		summaryCopyBtn.onclick = () => {
 			navigator.clipboard.writeText(recording.summary);
 			new Notice('Summary copied to clipboard');
 		};
 		
-		summaryInsertBtn.onclick = () => this.insertTextIntoNote(recording.summary);
+		summaryInsertBtn.onclick = async () => await this.insertTextIntoNote(recording.summary);
 	}
 
-	insertTextIntoNote(text: string) {
-		NoteHelper.insertTextIntoNote(this.app, text);
+	async insertTextIntoNote(text: string) {
+		await NoteHelper.insertTextIntoNote(this.app, text);
 	}
 
 	async onClose() {
