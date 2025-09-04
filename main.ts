@@ -233,18 +233,29 @@ class RecordingModal extends Modal {
 	}
 
 	startTimer(timeEl: HTMLElement) {
+		// Clear any existing timer first
+		this.stopTimer();
+		
+		console.log('Starting timer, initial recording time:', this.recordingTime);
 		this.timeInterval = setInterval(() => {
 			this.recordingTime++;
 			const minutes = Math.floor(this.recordingTime / 60);
 			const seconds = this.recordingTime % 60;
-			timeEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+			const display = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+			timeEl.textContent = display;
+			console.log('Timer tick:', this.recordingTime, 'display:', display);
 		}, 1000);
+		console.log('Timer started with interval:', this.timeInterval);
 	}
 
 	stopTimer() {
+		console.log('Stopping timer, current interval:', this.timeInterval);
 		if (this.timeInterval) {
 			clearInterval(this.timeInterval);
 			this.timeInterval = null;
+			console.log('Timer interval cleared');
+		} else {
+			console.log('No timer interval to clear');
 		}
 	}
 
@@ -605,12 +616,14 @@ class RecordingView extends ItemView {
 		if (this.recorder) {
 			console.log('Before stop - recording time:', this.recordingTime);
 			
-			// Stop timer and reset display FIRST
+			// Save duration BEFORE stopping timer
+			const recordingDuration = this.recordingTime;
+			
+			// Stop timer and reset display immediately 
 			this.stopTimer();
-			const recordingDuration = this.recordingTime; // Save duration before reset
 			this.recordingTime = 0;
 			timeEl.textContent = '00:00';
-			console.log('Timer stopped and reset immediately');
+			console.log('Timer stopped and reset immediately, saved duration:', recordingDuration);
 			
 			const audioBlob = await this.recorder.stop();
 			
@@ -647,18 +660,29 @@ class RecordingView extends ItemView {
 	}
 
 	startTimer(timeEl: HTMLElement) {
+		// Clear any existing timer first
+		this.stopTimer();
+		
+		console.log('Starting timer, initial recording time:', this.recordingTime);
 		this.timeInterval = setInterval(() => {
 			this.recordingTime++;
 			const minutes = Math.floor(this.recordingTime / 60);
 			const seconds = this.recordingTime % 60;
-			timeEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+			const display = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+			timeEl.textContent = display;
+			console.log('Timer tick:', this.recordingTime, 'display:', display);
 		}, 1000);
+		console.log('Timer started with interval:', this.timeInterval);
 	}
 
 	stopTimer() {
+		console.log('Stopping timer, current interval:', this.timeInterval);
 		if (this.timeInterval) {
 			clearInterval(this.timeInterval);
 			this.timeInterval = null;
+			console.log('Timer interval cleared');
+		} else {
+			console.log('No timer interval to clear');
 		}
 	}
 
