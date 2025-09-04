@@ -1,6 +1,6 @@
 {
 	"name": "ai-voice-meeting-notes",
-	"version": "1.3.0",
+	"version": "1.4.0",
 	"description": "Record, transcribe, and summarize voice meetings with AI integration",
 	"main": "main.js",
 	"scripts": {
