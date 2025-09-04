@@ -1,0 +1,104 @@
+.recording-status {
+	text-align: center;
+	margin-bottom: 20px;
+	padding: 20px;
+	background: var(--background-secondary);
+	border-radius: 8px;
+}
+
+.recording-time {
+	font-size: 2em;
+	font-weight: bold;
+	color: var(--text-accent);
+	font-family: monospace;
+}
+
+.recording-controls {
+	display: flex;
+	justify-content: center;
+	gap: 10px;
+	margin-bottom: 20px;
+}
+
+.recording-controls button {
+	padding: 10px 20px;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	font-weight: 500;
+	transition: background-color 0.2s;
+}
+
+.start-btn {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.start-btn:hover:not(:disabled) {
+	background: var(--interactive-accent-hover);
+}
+
+.pause-btn {
+	background: var(--color-orange);
+	color: white;
+}
+
+.pause-btn:hover:not(:disabled) {
+	opacity: 0.8;
+}
+
+.stop-btn {
+	background: var(--color-red);
+	color: white;
+}
+
+.stop-btn:hover:not(:disabled) {
+	opacity: 0.8;
+}
+
+.recording-controls button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.transcript-container,
+.summary-container {
+	margin-bottom: 20px;
+}
+
+.transcript-container textarea,
+.summary-container textarea {
+	width: 100%;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	padding: 10px;
+	color: var(--text-normal);
+	font-family: var(--font-monospace);
+	resize: vertical;
+}
+
+.actions {
+	display: flex;
+	gap: 10px;
+	justify-content: center;
+	flex-wrap: wrap;
+}
+
+.actions button {
+	padding: 8px 16px;
+	border: none;
+	border-radius: 4px;
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.actions button:hover {
+	background: var(--interactive-hover);
+}
+
+.modal {
+	max-width: 600px;
+}
