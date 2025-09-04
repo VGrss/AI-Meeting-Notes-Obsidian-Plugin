@@ -165,28 +165,91 @@
 	width: 100%;
 }
 
-.workspace-leaf-content[data-type="voice-recording-view"] .transcript-display,
-.workspace-leaf-content[data-type="voice-recording-view"] .summary-display {
-	width: 100%;
-	min-height: 120px;
-	background: var(--background-secondary);
+.recordings-history {
+	max-height: 400px;
+	overflow-y: auto;
+}
+
+.recordings-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.recording-card {
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	padding: 8px;
-	color: var(--text-normal);
-	font-family: var(--font-text);
-	font-size: var(--font-text-size);
-	resize: vertical;
+	border-radius: 8px;
+	padding: 12px;
+	background: var(--background-secondary);
+}
+
+.card-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+
+.transcript-section, .summary-section {
 	margin-bottom: 10px;
 }
 
-.workspace-leaf-content[data-type="voice-recording-view"] .actions {
-	flex-direction: column;
+.transcript-section h5, .summary-section h5 {
+	margin: 0 0 6px 0;
+	font-size: var(--font-ui-small);
+	color: var(--text-accent);
+}
+
+.card-text {
+	width: 100%;
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	padding: 6px;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	resize: none;
+	margin-bottom: 6px;
+}
+
+.text-actions {
+	display: flex;
 	gap: 6px;
 }
 
-.workspace-leaf-content[data-type="voice-recording-view"] .actions button {
-	width: 100%;
-	padding: 8px 12px;
+.action-btn {
+	padding: 4px 8px;
+	border: none;
+	border-radius: 4px;
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+	background: var(--interactive-hover);
+}
+
+.empty-state {
+	text-align: center;
+	color: var(--text-muted);
+	font-style: italic;
+	padding: 20px;
+}
+
+.setting-description {
+	color: var(--text-muted);
 	font-size: var(--font-ui-small);
+	margin-bottom: 15px;
+	line-height: 1.4;
+}
+
+.help-text {
+	color: var(--text-accent);
+	font-size: var(--font-ui-smaller);
+	margin-top: 10px;
 }

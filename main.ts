@@ -4,6 +4,14 @@ interface VoiceNotesSettings {
 	openaiApiKey: string;
 }
 
+interface RecordingData {
+	id: string;
+	timestamp: Date;
+	duration: number;
+	transcript: string;
+	summary: string;
+}
+
 const DEFAULT_SETTINGS: VoiceNotesSettings = {
 	openaiApiKey: ''
 }
@@ -14,6 +22,7 @@ export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
 	recorder: VoiceRecorder | null = null;
 	statusBarItem: HTMLElement;
+	recordings: RecordingData[] = [];
 
 	async onload() {
 		await this.loadSettings();
@@ -97,11 +106,18 @@ export default class VoiceNotesPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = await this.loadData() || {};
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data.settings || {});
+		this.recordings = data.recordings || [];
 	}
 
 	async saveSettings() {
-		await this.saveData(this.settings);
+		await this.saveData({ settings: this.settings, recordings: this.recordings });
+	}
+
+	addRecording(recording: RecordingData) {
+		this.recordings.unshift(recording);
+		this.saveSettings();
 	}
 }
 
@@ -131,18 +147,18 @@ class RecordingModal extends Modal {
 		const controlsEl = contentEl.createDiv('recording-controls');
 		
 		const startBtn = controlsEl.createEl('button', {
-			text: 'Start Recording',
+			text: '🎙️ Start Recording',
 			cls: 'start-btn'
 		});
 
 		const pauseBtn = controlsEl.createEl('button', {
-			text: 'Pause',
+			text: '⏸️ Pause',
 			cls: 'pause-btn',
 			attr: { disabled: 'true' }
 		});
 
 		const stopBtn = controlsEl.createEl('button', {
-			text: 'Stop',
+			text: '⏹️ Stop',
 			cls: 'stop-btn',
 			attr: { disabled: 'true' }
 		});
@@ -163,7 +179,7 @@ class RecordingModal extends Modal {
 				startBtn.disabled = true;
 				pauseBtn.disabled = false;
 				stopBtn.disabled = false;
-				startBtn.textContent = 'Recording...';
+				startBtn.textContent = '🔴 Recording...';
 
 				this.startTimer(timeEl);
 				new Notice('Recording started');
@@ -173,7 +189,7 @@ class RecordingModal extends Modal {
 		} else if (this.isPaused && this.recorder) {
 			this.recorder.resume();
 			this.isPaused = false;
-			pauseBtn.textContent = 'Pause';
+			pauseBtn.textContent = '⏸️ Pause';
 			this.startTimer(timeEl);
 			new Notice('Recording resumed');
 		}
@@ -183,7 +199,7 @@ class RecordingModal extends Modal {
 		if (this.recorder && !this.isPaused) {
 			this.recorder.pause();
 			this.isPaused = true;
-			pauseBtn.textContent = 'Resume';
+			pauseBtn.textContent = '▶️ Resume';
 			this.stopTimer();
 			new Notice('Recording paused');
 		}
@@ -198,8 +214,8 @@ class RecordingModal extends Modal {
 			startBtn.disabled = false;
 			pauseBtn.disabled = true;
 			stopBtn.disabled = true;
-			startBtn.textContent = 'Start Recording';
-			pauseBtn.textContent = 'Pause';
+			startBtn.textContent = '🎙️ Start Recording';
+			pauseBtn.textContent = '⏸️ Pause';
 			
 			this.stopTimer();
 			this.recordingTime = 0;
@@ -338,7 +354,7 @@ class TranscriptModal extends Modal {
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
-				model: 'gpt-3.5-turbo',
+				model: 'gpt-4o',
 				messages: [{
 					role: 'user',
 					content: `Please summarize the following meeting transcript into key points and action items:\n\n${this.transcript}`
@@ -450,71 +466,34 @@ class RecordingView extends ItemView {
 		const controlsEl = container.createDiv('recording-controls');
 		
 		const startBtn = controlsEl.createEl('button', {
-			text: 'Start Recording',
+			text: '🎙️ Start Recording',
 			cls: 'start-btn'
 		});
 
 		const pauseBtn = controlsEl.createEl('button', {
-			text: 'Pause',
+			text: '⏸️ Pause',
 			cls: 'pause-btn',
 			attr: { disabled: 'true' }
 		});
 
 		const stopBtn = controlsEl.createEl('button', {
-			text: 'Stop',
+			text: '⏹️ Stop',
 			cls: 'stop-btn',
 			attr: { disabled: 'true' }
 		});
 
-		const transcriptContainer = container.createDiv('transcript-container');
-		transcriptContainer.createEl('h4', { text: 'Live Transcript' });
-		const transcriptEl = transcriptContainer.createEl('textarea', {
-			attr: { 
-				readonly: 'true',
-				rows: '8',
-				placeholder: 'Transcript will appear here after recording...'
-			},
-			cls: 'transcript-display'
-		});
+		const historyContainer = container.createDiv('recordings-history');
+		historyContainer.createEl('h4', { text: 'Recording History' });
+		const historyListEl = historyContainer.createDiv('recordings-list');
 
-		const summaryContainer = container.createDiv('summary-container');
-		summaryContainer.createEl('h4', { text: 'AI Summary' });
-		const summaryEl = summaryContainer.createEl('textarea', {
-			attr: { 
-				readonly: 'true',
-				rows: '6',
-				placeholder: 'AI summary will appear here...'
-			},
-			cls: 'summary-display'
-		});
-
-		const actionsEl = container.createDiv('actions');
-		
-		const summaryBtn = actionsEl.createEl('button', { 
-			text: 'Generate Summary',
-			attr: { disabled: 'true' }
-		});
-
-		const insertBtn = actionsEl.createEl('button', { 
-			text: 'Insert into Note',
-			attr: { disabled: 'true' }
-		});
-
-		const copyBtn = actionsEl.createEl('button', { 
-			text: 'Copy to Clipboard',
-			attr: { disabled: 'true' }
-		});
-
-		startBtn.onclick = () => this.startRecording(startBtn, pauseBtn, stopBtn, timeEl, transcriptEl, summaryEl, summaryBtn, insertBtn, copyBtn);
+		startBtn.onclick = () => this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
 		pauseBtn.onclick = () => this.pauseRecording(pauseBtn);
-		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn, transcriptEl, summaryEl, summaryBtn, insertBtn, copyBtn);
+		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl);
 		
-		summaryBtn.onclick = () => this.generateSummary(summaryEl, summaryBtn);
-		insertBtn.onclick = () => this.insertIntoNote();
-		copyBtn.onclick = () => this.copyToClipboard();
+		this.refreshRecordingHistory(historyListEl);
 	}
 
-	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement, transcriptEl: HTMLTextAreaElement, summaryEl: HTMLTextAreaElement, summaryBtn: HTMLButtonElement, insertBtn: HTMLButtonElement, copyBtn: HTMLButtonElement) {
+	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
 		if (!this.isRecording) {
 			try {
 				this.recorder = new VoiceRecorder();
@@ -525,7 +504,7 @@ class RecordingView extends ItemView {
 				startBtn.disabled = true;
 				pauseBtn.disabled = false;
 				stopBtn.disabled = false;
-				startBtn.textContent = 'Recording...';
+				startBtn.textContent = '🔴 Recording...';
 
 				this.startTimer(timeEl);
 				new Notice('Recording started');
@@ -535,7 +514,7 @@ class RecordingView extends ItemView {
 		} else if (this.isPaused && this.recorder) {
 			this.recorder.resume();
 			this.isPaused = false;
-			pauseBtn.textContent = 'Pause';
+			pauseBtn.textContent = '⏸️ Pause';
 			this.startTimer(timeEl);
 			new Notice('Recording resumed');
 		}
@@ -545,13 +524,13 @@ class RecordingView extends ItemView {
 		if (this.recorder && !this.isPaused) {
 			this.recorder.pause();
 			this.isPaused = true;
-			pauseBtn.textContent = 'Resume';
+			pauseBtn.textContent = '▶️ Resume';
 			this.stopTimer();
 			new Notice('Recording paused');
 		}
 	}
 
-	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, transcriptEl: HTMLTextAreaElement, summaryEl: HTMLTextAreaElement, summaryBtn: HTMLButtonElement, insertBtn: HTMLButtonElement, copyBtn: HTMLButtonElement) {
+	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, historyListEl: HTMLElement) {
 		if (this.recorder) {
 			const audioBlob = await this.recorder.stop();
 			this.isRecording = false;
@@ -560,8 +539,8 @@ class RecordingView extends ItemView {
 			startBtn.disabled = false;
 			pauseBtn.disabled = true;
 			stopBtn.disabled = true;
-			startBtn.textContent = 'Start Recording';
-			pauseBtn.textContent = 'Pause';
+			startBtn.textContent = '🎙️ Start Recording';
+			pauseBtn.textContent = '⏸️ Pause';
 			
 			this.stopTimer();
 			this.recordingTime = 0;
@@ -569,14 +548,22 @@ class RecordingView extends ItemView {
 			new Notice('Recording stopped. Processing...');
 			
 			try {
-				this.transcript = await this.transcribeAudio(audioBlob);
-				transcriptEl.value = this.transcript;
-				summaryBtn.disabled = false;
-				insertBtn.disabled = false;
-				copyBtn.disabled = false;
-				new Notice('Transcript ready!');
+				const transcript = await this.transcribeAudio(audioBlob);
+				const summary = await this.generateSummaryText(transcript);
+				
+				const recording: RecordingData = {
+					id: Date.now().toString(),
+					timestamp: new Date(),
+					duration: this.recordingTime,
+					transcript,
+					summary
+				};
+				
+				this.plugin.addRecording(recording);
+				this.refreshRecordingHistory(historyListEl);
+				new Notice('Recording processed and saved!');
 			} catch (error) {
-				new Notice('Transcription failed: ' + error.message);
+				new Notice('Processing failed: ' + error.message);
 			}
 		}
 	}
@@ -621,84 +608,139 @@ class RecordingView extends ItemView {
 	}
 
 
-	async generateSummary(summaryEl: HTMLTextAreaElement, summaryBtn: HTMLButtonElement) {
+	async generateSummaryText(transcript: string): Promise<string> {
 		if (!this.plugin.settings.openaiApiKey) {
-			new Notice('OpenAI API key not configured');
+			throw new Error('OpenAI API key not configured');
+		}
+
+		const response = await fetch('https://api.openai.com/v1/chat/completions', {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${this.plugin.settings.openaiApiKey}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				model: 'gpt-4o',
+				messages: [{
+					role: 'user',
+					content: `Please summarize the following meeting transcript into key points and action items:\n\n${transcript}`
+				}],
+				max_tokens: 500,
+				temperature: 0.3
+			})
+		});
+
+		const result = await response.json();
+		return result.choices[0].message.content;
+	}
+
+	refreshRecordingHistory(historyListEl: HTMLElement) {
+		historyListEl.empty();
+		
+		if (this.plugin.recordings.length === 0) {
+			historyListEl.createEl('p', { 
+				text: 'No recordings yet. Start recording to see them here!',
+				cls: 'empty-state'
+			});
 			return;
 		}
 
-		summaryBtn.disabled = true;
-		summaryBtn.textContent = 'Generating...';
-
-		try {
-			const response = await fetch('https://api.openai.com/v1/chat/completions', {
-				method: 'POST',
-				headers: {
-					'Authorization': `Bearer ${this.plugin.settings.openaiApiKey}`,
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					model: 'gpt-3.5-turbo',
-					messages: [{
-						role: 'user',
-						content: `Please summarize the following meeting transcript into key points and action items:\n\n${this.transcript}`
-					}],
-					max_tokens: 500,
-					temperature: 0.3
-				})
-			});
-
-			const result = await response.json();
-			this.summary = result.choices[0].message.content;
-			summaryEl.value = this.summary;
-			new Notice('Summary generated!');
-		} catch (error) {
-			new Notice('Failed to generate summary: ' + error.message);
-		}
-
-		summaryBtn.disabled = false;
-		summaryBtn.textContent = 'Generate Summary';
+		this.plugin.recordings.forEach(recording => {
+			this.createRecordingCard(historyListEl, recording);
+		});
 	}
 
-	insertIntoNote() {
+	createRecordingCard(container: HTMLElement, recording: RecordingData) {
+		const card = container.createDiv('recording-card');
+		
+		const cardHeader = card.createDiv('card-header');
+		const timestamp = cardHeader.createEl('span', { 
+			text: recording.timestamp.toLocaleString(),
+			cls: 'recording-timestamp'
+		});
+		const duration = cardHeader.createEl('span', { 
+			text: `${Math.floor(recording.duration / 60)}:${(recording.duration % 60).toString().padStart(2, '0')}`,
+			cls: 'recording-duration'
+		});
+
+		const transcriptSection = card.createDiv('transcript-section');
+		transcriptSection.createEl('h5', { text: '📝 Transcript' });
+		const transcriptEl = transcriptSection.createEl('textarea', {
+			attr: { readonly: 'true', rows: '4' },
+			cls: 'card-text'
+		});
+		transcriptEl.value = recording.transcript;
+		
+		const transcriptActions = transcriptSection.createDiv('text-actions');
+		const transcriptCopyBtn = transcriptActions.createEl('button', { 
+			text: '📋',
+			cls: 'action-btn',
+			attr: { title: 'Copy transcript to clipboard' }
+		});
+		const transcriptInsertBtn = transcriptActions.createEl('button', { 
+			text: '📄',
+			cls: 'action-btn',
+			attr: { title: 'Insert transcript into note' }
+		});
+
+		const summarySection = card.createDiv('summary-section');
+		summarySection.createEl('h5', { text: '🤖 AI Summary' });
+		const summaryEl = summarySection.createEl('textarea', {
+			attr: { readonly: 'true', rows: '3' },
+			cls: 'card-text'
+		});
+		summaryEl.value = recording.summary;
+		
+		const summaryActions = summarySection.createDiv('text-actions');
+		const summaryCopyBtn = summaryActions.createEl('button', { 
+			text: '📋',
+			cls: 'action-btn',
+			attr: { title: 'Copy summary to clipboard' }
+		});
+		const summaryInsertBtn = summaryActions.createEl('button', { 
+			text: '📄',
+			cls: 'action-btn',
+			attr: { title: 'Insert summary into note' }
+		});
+
+		transcriptCopyBtn.onclick = () => {
+			navigator.clipboard.writeText(recording.transcript);
+			new Notice('Transcript copied to clipboard');
+		};
+		
+		transcriptInsertBtn.onclick = () => this.insertTextIntoNote(recording.transcript);
+		
+		summaryCopyBtn.onclick = () => {
+			navigator.clipboard.writeText(recording.summary);
+			new Notice('Summary copied to clipboard');
+		};
+		
+		summaryInsertBtn.onclick = () => this.insertTextIntoNote(recording.summary);
+	}
+
+	insertTextIntoNote(text: string) {
 		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 		
 		if (activeView) {
 			const editor = activeView.editor;
-			const content = this.formatContent();
-			editor.replaceSelection(content);
-			new Notice('Transcript inserted into current note');
+			const cursor = editor.getCursor();
+			editor.replaceRange(text + '\n\n', cursor);
+			new Notice('Text inserted into current note');
 		} else {
-			this.app.workspace.openLinkText('Voice Meeting Notes - ' + new Date().toLocaleString(), '', true)
+			this.app.workspace.openLinkText('Voice Recording - ' + new Date().toLocaleString(), '', true)
 				.then(() => {
 					setTimeout(() => {
 						const newActiveView = this.app.workspace.getActiveViewOfType(MarkdownView);
 						if (newActiveView) {
 							const editor = newActiveView.editor;
-							editor.setValue(this.formatContent());
-							new Notice('New note created with transcript');
+							editor.setValue(text);
+							new Notice('New note created with content');
 						}
 					}, 100);
 				});
 		}
 	}
 
-	copyToClipboard() {
-		navigator.clipboard.writeText(this.formatContent());
-		new Notice('Transcript copied to clipboard');
-	}
-
-	formatContent(): string {
-		let content = `## Voice Meeting Notes - ${new Date().toLocaleString()}\n\n`;
-		
-		if (this.summary) {
-			content += `### Summary\n${this.summary}\n\n`;
-		}
-		
-		content += `### Raw Transcript\n${this.transcript}`;
-		
-		return content;
-	}
 
 	async onClose() {
 		if (this.recorder) {
@@ -780,9 +822,14 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', { text: 'AI Voice Meeting Notes Settings' });
 
+		containerEl.createEl('p', {
+			text: 'This plugin uses OpenAI Whisper for audio transcription and GPT-4o for intelligent summarization of your voice recordings.',
+			cls: 'setting-description'
+		});
+
 		new Setting(containerEl)
 			.setName('OpenAI API Key')
-			.setDesc('API key for OpenAI (used for transcription and summary generation)')
+			.setDesc('API key for OpenAI services (Whisper transcription + GPT-4o summarization)')
 			.addText(text => {
 				text.setPlaceholder('Enter your OpenAI API key');
 				
@@ -807,5 +854,10 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 				.onClick(() => {
 					window.open('https://platform.openai.com/api-keys', '_blank');
 				}));
+
+		containerEl.createEl('p', {
+			text: '💡 Need an API key? Visit the OpenAI Platform above to create your account and get your API key.',
+			cls: 'help-text'
+		});
 	}
 }
