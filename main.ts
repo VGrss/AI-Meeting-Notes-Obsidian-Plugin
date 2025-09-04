@@ -1,15 +1,11 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView } from 'obsidian';
 
 interface VoiceNotesSettings {
-	transcriptionApiKey: string;
 	openaiApiKey: string;
-	transcriptionService: 'whisper' | 'deepgram' | 'assemblyai';
 }
 
 const DEFAULT_SETTINGS: VoiceNotesSettings = {
-	transcriptionApiKey: '',
-	openaiApiKey: '',
-	transcriptionService: 'whisper'
+	openaiApiKey: ''
 }
 
 const RECORDING_VIEW_TYPE = 'voice-recording-view';
@@ -241,25 +237,12 @@ class RecordingModal extends Modal {
 	}
 
 	async transcribeAudio(audioBlob: Blob): Promise<string> {
-		const { transcriptionService, transcriptionApiKey } = this.plugin.settings;
+		const { openaiApiKey } = this.plugin.settings;
 		
-		if (!transcriptionApiKey) {
-			throw new Error('Transcription API key not configured');
+		if (!openaiApiKey) {
+			throw new Error('OpenAI API key not configured');
 		}
 
-		switch (transcriptionService) {
-			case 'whisper':
-				return await this.transcribeWithWhisper(audioBlob, transcriptionApiKey);
-			case 'deepgram':
-				return await this.transcribeWithDeepgram(audioBlob, transcriptionApiKey);
-			case 'assemblyai':
-				return await this.transcribeWithAssemblyAI(audioBlob, transcriptionApiKey);
-			default:
-				throw new Error('Unknown transcription service');
-		}
-	}
-
-	async transcribeWithWhisper(audioBlob: Blob, apiKey: string): Promise<string> {
 		const formData = new FormData();
 		formData.append('file', audioBlob, 'recording.wav');
 		formData.append('model', 'whisper-1');
@@ -267,66 +250,13 @@ class RecordingModal extends Modal {
 		const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
 			method: 'POST',
 			headers: {
-				'Authorization': `Bearer ${apiKey}`,
+				'Authorization': `Bearer ${openaiApiKey}`,
 			},
 			body: formData
 		});
 
 		const result = await response.json();
 		return result.text;
-	}
-
-	async transcribeWithDeepgram(audioBlob: Blob, apiKey: string): Promise<string> {
-		const response = await fetch('https://api.deepgram.com/v1/listen', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Token ${apiKey}`,
-				'Content-Type': 'audio/wav'
-			},
-			body: audioBlob
-		});
-
-		const result = await response.json();
-		return result.results.channels[0].alternatives[0].transcript;
-	}
-
-	async transcribeWithAssemblyAI(audioBlob: Blob, apiKey: string): Promise<string> {
-		// First upload the file
-		const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
-			method: 'POST',
-			headers: {
-				'authorization': apiKey,
-			},
-			body: audioBlob
-		});
-
-		const { upload_url } = await uploadResponse.json();
-
-		// Then transcribe
-		const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
-			method: 'POST',
-			headers: {
-				'authorization': apiKey,
-				'content-type': 'application/json',
-			},
-			body: JSON.stringify({
-				audio_url: upload_url
-			})
-		});
-
-		const { id } = await transcriptResponse.json();
-
-		// Poll for completion
-		let transcript;
-		do {
-			await new Promise(resolve => setTimeout(resolve, 1000));
-			const pollResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
-				headers: { 'authorization': apiKey }
-			});
-			transcript = await pollResponse.json();
-		} while (transcript.status === 'processing');
-
-		return transcript.text;
 	}
 
 	onClose() {
@@ -668,25 +598,12 @@ class RecordingView extends ItemView {
 	}
 
 	async transcribeAudio(audioBlob: Blob): Promise<string> {
-		const { transcriptionService, transcriptionApiKey } = this.plugin.settings;
+		const { openaiApiKey } = this.plugin.settings;
 		
-		if (!transcriptionApiKey) {
-			throw new Error('Transcription API key not configured');
+		if (!openaiApiKey) {
+			throw new Error('OpenAI API key not configured');
 		}
 
-		switch (transcriptionService) {
-			case 'whisper':
-				return await this.transcribeWithWhisper(audioBlob, transcriptionApiKey);
-			case 'deepgram':
-				return await this.transcribeWithDeepgram(audioBlob, transcriptionApiKey);
-			case 'assemblyai':
-				return await this.transcribeWithAssemblyAI(audioBlob, transcriptionApiKey);
-			default:
-				throw new Error('Unknown transcription service');
-		}
-	}
-
-	async transcribeWithWhisper(audioBlob: Blob, apiKey: string): Promise<string> {
 		const formData = new FormData();
 		formData.append('file', audioBlob, 'recording.wav');
 		formData.append('model', 'whisper-1');
@@ -694,7 +611,7 @@ class RecordingView extends ItemView {
 		const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
 			method: 'POST',
 			headers: {
-				'Authorization': `Bearer ${apiKey}`,
+				'Authorization': `Bearer ${openaiApiKey}`,
 			},
 			body: formData
 		});
@@ -703,55 +620,6 @@ class RecordingView extends ItemView {
 		return result.text;
 	}
 
-	async transcribeWithDeepgram(audioBlob: Blob, apiKey: string): Promise<string> {
-		const response = await fetch('https://api.deepgram.com/v1/listen', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Token ${apiKey}`,
-				'Content-Type': 'audio/wav'
-			},
-			body: audioBlob
-		});
-
-		const result = await response.json();
-		return result.results.channels[0].alternatives[0].transcript;
-	}
-
-	async transcribeWithAssemblyAI(audioBlob: Blob, apiKey: string): Promise<string> {
-		const uploadResponse = await fetch('https://api.assemblyai.com/v2/upload', {
-			method: 'POST',
-			headers: {
-				'authorization': apiKey,
-			},
-			body: audioBlob
-		});
-
-		const { upload_url } = await uploadResponse.json();
-
-		const transcriptResponse = await fetch('https://api.assemblyai.com/v2/transcript', {
-			method: 'POST',
-			headers: {
-				'authorization': apiKey,
-				'content-type': 'application/json',
-			},
-			body: JSON.stringify({
-				audio_url: upload_url
-			})
-		});
-
-		const { id } = await transcriptResponse.json();
-
-		let transcript;
-		do {
-			await new Promise(resolve => setTimeout(resolve, 1000));
-			const pollResponse = await fetch(`https://api.assemblyai.com/v2/transcript/${id}`, {
-				headers: { 'authorization': apiKey }
-			});
-			transcript = await pollResponse.json();
-		} while (transcript.status === 'processing');
-
-		return transcript.text;
-	}
 
 	async generateSummary(summaryEl: HTMLTextAreaElement, summaryBtn: HTMLButtonElement) {
 		if (!this.plugin.settings.openaiApiKey) {
@@ -913,82 +781,31 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'AI Voice Meeting Notes Settings' });
 
 		new Setting(containerEl)
-			.setName('Transcription Service')
-			.setDesc('Choose your preferred transcription service')
-			.addDropdown(dropdown => dropdown
-				.addOption('whisper', 'OpenAI Whisper')
-				.addOption('deepgram', 'Deepgram')
-				.addOption('assemblyai', 'AssemblyAI')
-				.setValue(this.plugin.settings.transcriptionService)
-				.onChange(async (value) => {
-					this.plugin.settings.transcriptionService = value as any;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Transcription API Key')
-			.setDesc('API key for your chosen transcription service')
-			.addText(text => text
-				.setPlaceholder('Enter your API key')
-				.setValue(this.plugin.settings.transcriptionApiKey)
-				.onChange(async (value) => {
-					this.plugin.settings.transcriptionApiKey = value;
-					await this.plugin.saveSettings();
-				}))
-			.addExtraButton(button => {
-				const service = this.plugin.settings.transcriptionService;
-				let url = '';
-				let text = '';
+			.setName('OpenAI API Key')
+			.setDesc('API key for OpenAI (used for transcription and summary generation)')
+			.addText(text => {
+				text.setPlaceholder('Enter your OpenAI API key');
 				
-				switch (service) {
-					case 'whisper':
-						url = 'https://platform.openai.com/api-keys';
-						text = 'Get OpenAI API Key';
-						break;
-					case 'deepgram':
-						url = 'https://console.deepgram.com/';
-						text = 'Get Deepgram API Key';
-						break;
-					case 'assemblyai':
-						url = 'https://www.assemblyai.com/dashboard/';
-						text = 'Get AssemblyAI API Key';
-						break;
+				if (this.plugin.settings.openaiApiKey) {
+					text.setValue('*'.repeat(this.plugin.settings.openaiApiKey.length));
+				} else {
+					text.setValue('');
 				}
 				
-				button
-					.setIcon('external-link')
-					.setTooltip(text)
-					.onClick(() => {
-						window.open(url, '_blank');
-					});
-			});
-
-		new Setting(containerEl)
-			.setName('OpenAI API Key')
-			.setDesc('API key for OpenAI (used for summary generation)')
-			.addText(text => text
-				.setPlaceholder('Enter your OpenAI API key')
-				.setValue(this.plugin.settings.openaiApiKey)
-				.onChange(async (value) => {
-					this.plugin.settings.openaiApiKey = value;
-					await this.plugin.saveSettings();
-				}))
+				text.inputEl.type = 'password';
+				
+				text.onChange(async (value) => {
+					if (value !== '*'.repeat(this.plugin.settings.openaiApiKey.length)) {
+						this.plugin.settings.openaiApiKey = value;
+						await this.plugin.saveSettings();
+					}
+				});
+			})
 			.addExtraButton(button => button
 				.setIcon('external-link')
 				.setTooltip('Get OpenAI API Key')
 				.onClick(() => {
 					window.open('https://platform.openai.com/api-keys', '_blank');
 				}));
-
-		containerEl.createEl('h3', { text: 'Service Recommendations' });
-		containerEl.createEl('p', { 
-			text: 'OpenAI Whisper: Best overall accuracy, works well with technical content. Recommended for most users.' 
-		});
-		containerEl.createEl('p', { 
-			text: 'Deepgram: Fast real-time transcription, good for live meetings.' 
-		});
-		containerEl.createEl('p', { 
-			text: 'AssemblyAI: Good balance of speed and accuracy, competitive pricing.' 
-		});
 	}
 }
