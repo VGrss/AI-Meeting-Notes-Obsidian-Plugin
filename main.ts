@@ -17,6 +17,7 @@ const RECORDING_VIEW_TYPE = 'voice-recording-view';
 export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
 	recorder: VoiceRecorder | null = null;
+	statusBarItem: HTMLElement;
 
 	async onload() {
 		await this.loadSettings();
@@ -26,10 +27,11 @@ export default class VoiceNotesPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'open-recording-panel',
-			name: 'Open Voice Recording Panel',
+			id: 'toggle-recording-panel',
+			name: 'Toggle Voice Recording Panel',
+			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "r" }],
 			callback: () => {
-				this.activateRecordingView();
+				this.toggleRecordingView();
 			}
 		});
 
@@ -45,6 +47,14 @@ export default class VoiceNotesPlugin extends Plugin {
 			RECORDING_VIEW_TYPE,
 			(leaf) => new RecordingView(leaf, this)
 		);
+
+		this.statusBarItem = this.addStatusBarItem();
+		this.statusBarItem.setText('🎙️ Recording');
+		this.statusBarItem.addClass('mod-clickable');
+		this.statusBarItem.onClickEvent(() => {
+			this.toggleRecordingView();
+		});
+		this.statusBarItem.setAttribute('title', 'Toggle Voice Recording Panel (Cmd+Shift+R)');
 
 		this.addSettingTab(new VoiceNotesSettingTab(this.app, this));
 	}
@@ -74,6 +84,19 @@ export default class VoiceNotesPlugin extends Plugin {
 		
 		if (leaf) {
 			workspace.revealLeaf(leaf);
+		}
+	}
+
+	async toggleRecordingView() {
+		const { workspace } = this.app;
+		const leaves = workspace.getLeavesOfType(RECORDING_VIEW_TYPE);
+		
+		if (leaves.length > 0) {
+			// Panel is open, close it
+			leaves[0].detach();
+		} else {
+			// Panel is closed, open it
+			await this.activateRecordingView();
 		}
 	}
 
@@ -478,7 +501,15 @@ class RecordingView extends ItemView {
 	async onOpen() {
 		const container = this.containerEl.children[1];
 		container.empty();
-		container.createEl('h4', { text: 'AI Voice Recording' });
+		
+		const headerEl = container.createDiv('panel-header');
+		headerEl.createEl('h4', { text: 'AI Voice Recording' });
+		
+		const closeBtn = headerEl.createEl('button', {
+			text: '×',
+			cls: 'close-panel-btn'
+		});
+		closeBtn.onclick = () => this.leaf.detach();
 
 		const statusEl = container.createDiv('recording-status');
 		const timeEl = statusEl.createEl('div', { 
