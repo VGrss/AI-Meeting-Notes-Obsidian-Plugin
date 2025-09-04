@@ -158,14 +158,14 @@ class RecordingModal extends Modal {
 		});
 
 		const stopBtn = controlsEl.createEl('button', {
-			text: '⏹️ Stop',
+			text: '✅ Recording complete',
 			cls: 'stop-btn',
 			attr: { disabled: 'true' }
 		});
 
 		startBtn.onclick = () => this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
 		pauseBtn.onclick = () => this.pauseRecording(pauseBtn);
-		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn);
+		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn, timeEl);
 	}
 
 	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
@@ -205,7 +205,7 @@ class RecordingModal extends Modal {
 		}
 	}
 
-	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement) {
+	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
 		if (this.recorder) {
 			const audioBlob = await this.recorder.stop();
 			this.isRecording = false;
@@ -219,8 +219,9 @@ class RecordingModal extends Modal {
 			
 			this.stopTimer();
 			this.recordingTime = 0;
+			timeEl.textContent = '00:00'; // Reset timer display
 			
-			new Notice('Recording stopped. Processing...');
+			new Notice('Recording complete. Processing...');
 			this.close();
 			
 			await this.processRecording(audioBlob);
@@ -485,12 +486,12 @@ class RecordingView extends ItemView {
 		});
 
 		const stopBtn = controlsEl.createEl('button', {
-			text: '⏹️ Stop',
+			text: '✅ Recording complete',
 			cls: 'stop-btn',
 			attr: { 
 				disabled: 'true',
 				type: 'button',
-				'aria-label': 'Stop Recording'
+				'aria-label': 'Complete Recording'
 			}
 		});
 
@@ -531,7 +532,7 @@ class RecordingView extends ItemView {
 		
 		stopBtn.addEventListener('click', () => {
 			console.log('Stop button clicked');
-			this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl);
+			this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl, timeEl);
 		});
 		
 		closeBtn.addEventListener('click', () => {
@@ -585,9 +586,11 @@ class RecordingView extends ItemView {
 		}
 	}
 
-	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, historyListEl: HTMLElement) {
+	async stopRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, historyListEl: HTMLElement, timeEl: HTMLElement) {
 		if (this.recorder) {
 			const audioBlob = await this.recorder.stop();
+			const recordingDuration = this.recordingTime; // Save duration before reset
+			
 			this.isRecording = false;
 			this.isPaused = false;
 			
@@ -599,8 +602,9 @@ class RecordingView extends ItemView {
 			
 			this.stopTimer();
 			this.recordingTime = 0;
+			timeEl.textContent = '00:00'; // Reset timer display
 			
-			new Notice('Recording stopped. Processing...');
+			new Notice('Recording complete. Processing...');
 			
 			try {
 				const transcript = await this.transcribeAudio(audioBlob);
@@ -609,7 +613,7 @@ class RecordingView extends ItemView {
 				const recording: RecordingData = {
 					id: Date.now().toString(),
 					timestamp: new Date(),
-					duration: this.recordingTime,
+					duration: recordingDuration, // Use saved duration
 					transcript,
 					summary
 				};
