@@ -21,44 +21,69 @@
 }
 
 .recording-controls button {
-	padding: 10px 20px;
-	border: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
 	border-radius: 6px;
-	cursor: pointer;
+	font-size: 14px;
 	font-weight: 500;
-	transition: background-color 0.2s;
+	transition: all 0.15s ease-in-out;
+	cursor: pointer;
+	border: 1px solid transparent;
+	padding: 8px 16px;
+	height: 36px;
+	background: var(--background-primary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+}
+
+.recording-controls button:hover:not(:disabled) {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+}
+
+.recording-controls button:active:not(:disabled) {
+	transform: translateY(1px);
 }
 
 .start-btn {
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
+	border: 1px solid var(--interactive-accent);
 }
 
 .start-btn:hover:not(:disabled) {
 	background: var(--interactive-accent-hover);
+	border-color: var(--interactive-accent-hover);
 }
 
 .pause-btn {
-	background: var(--color-orange);
+	background: #f59e0b;
 	color: white;
+	border: 1px solid #f59e0b;
 }
 
 .pause-btn:hover:not(:disabled) {
-	opacity: 0.8;
+	background: #d97706;
+	border-color: #d97706;
 }
 
 .stop-btn {
-	background: var(--color-green);
+	background: #10b981;
 	color: white;
+	border: 1px solid #10b981;
 }
 
 .stop-btn:hover:not(:disabled) {
-	opacity: 0.8;
+	background: #059669;
+	border-color: #059669;
 }
 
 .recording-controls button:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
+	transform: none;
 }
 
 .transcript-container,
@@ -86,17 +111,29 @@
 }
 
 .actions button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
+	border-radius: 6px;
 	padding: 8px 16px;
-	border: none;
-	border-radius: 4px;
-	background: var(--interactive-normal);
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
 	color: var(--text-normal);
 	cursor: pointer;
-	transition: background-color 0.2s;
+	font-size: 14px;
+	font-weight: 500;
+	transition: all 0.15s ease-in-out;
+	height: 36px;
 }
 
 .actions button:hover {
-	background: var(--interactive-hover);
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+}
+
+.actions button:active {
+	transform: translateY(1px);
 }
 
 .modal {
@@ -125,21 +162,30 @@
 }
 
 .close-panel-btn {
-	background: none;
-	border: none;
-	font-size: 20px;
-	cursor: pointer;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+	width: 32px;
+	height: 32px;
+	border: 1px solid transparent;
+	background: transparent;
 	color: var(--text-muted);
-	padding: 2px 8px;
-	border-radius: 4px;
+	cursor: pointer;
+	font-size: 16px;
+	font-weight: 500;
+	transition: all 0.15s ease-in-out;
 	line-height: 1;
-	pointer-events: auto;
-	z-index: 10;
 }
 
 .close-panel-btn:hover {
 	background: var(--background-modifier-hover);
 	color: var(--text-normal);
+	border-color: var(--background-modifier-border);
+}
+
+.close-panel-btn:active {
+	transform: translateY(1px);
 }
 
 .workspace-leaf-content[data-type="voice-recording-view"] .view-content {
@@ -209,19 +255,26 @@
 }
 
 .recording-card {
-	border: 1px solid var(--background-modifier-border);
+	border: 1px solid hsl(var(--border, 214 13% 27%));
 	border-radius: 8px;
-	padding: 12px;
-	background: var(--background-secondary);
+	padding: 16px;
+	background: var(--background-primary);
+	box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+	transition: all 0.15s ease-in-out;
+}
+
+.recording-card:hover {
+	box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+	border-color: var(--background-modifier-border-hover);
 }
 
 .card-header {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 8px;
-	font-size: var(--font-ui-small);
-	color: var(--text-muted);
+	margin-bottom: 12px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid hsl(var(--border, 214 13% 27%));
 }
 
 .transcript-section, .summary-section {
@@ -235,15 +288,24 @@
 }
 
 .card-text {
+	display: flex;
 	width: 100%;
-	background: var(--background-primary);
+	border-radius: 6px;
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 4px;
-	padding: 6px;
-	font-size: var(--font-ui-smaller);
+	background: var(--background-primary);
+	padding: 12px 14px;
+	font-size: 14px;
 	color: var(--text-normal);
 	resize: none;
-	margin-bottom: 6px;
+	margin-bottom: 12px;
+	min-height: 80px;
+	transition: border-color 0.15s ease-in-out;
+}
+
+.card-text:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 1px var(--interactive-accent);
 }
 
 .text-actions {
@@ -252,18 +314,30 @@
 }
 
 .action-btn {
-	padding: 4px 8px;
-	border: none;
-	border-radius: 4px;
-	background: var(--interactive-normal);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
+	border-radius: 6px;
+	padding: 6px 10px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
 	color: var(--text-normal);
 	cursor: pointer;
-	font-size: var(--font-ui-smaller);
-	transition: background-color 0.2s;
+	font-size: 13px;
+	font-weight: 500;
+	transition: all 0.15s ease-in-out;
+	height: 32px;
+	min-width: 32px;
 }
 
 .action-btn:hover {
-	background: var(--interactive-hover);
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+}
+
+.action-btn:active {
+	transform: translateY(1px);
 }
 
 .empty-state {
@@ -286,28 +360,39 @@
 	margin-top: 10px;
 }
 
-/* Tab System for Recording Cards */
+/* Tab System for Recording Cards - shadcn style */
 .tab-container {
     width: 100%;
 }
 
 .tab-headers {
-    display: flex;
-    border-bottom: 1px solid var(--background-modifier-border);
-    margin-bottom: 8px;
+    display: inline-flex;
+    height: 36px;
+    items-center: center;
+    justify-content: center;
+    border-radius: 6px;
+    background: hsl(var(--muted, 210 40% 98%));
+    padding: 4px;
+    margin-bottom: 12px;
+    width: 100%;
 }
 
 .tab-header {
-    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    border-radius: 4px;
     padding: 6px 12px;
+    font-size: 14px;
+    font-weight: 500;
     border: none;
-    background: var(--background-secondary);
+    background: transparent;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: var(--font-ui-smaller);
-    border-radius: 0;
-    border-bottom: 2px solid transparent;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease-in-out;
+    flex: 1;
+    height: 28px;
 }
 
 .tab-header:hover {
@@ -317,17 +402,9 @@
 
 .tab-header.active {
     background: var(--background-primary);
-    color: var(--text-accent);
-    border-bottom-color: var(--text-accent);
+    color: var(--text-normal);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
     font-weight: 500;
-}
-
-.tab-header:first-child {
-    border-top-left-radius: 4px;
-}
-
-.tab-header:last-child {
-    border-top-right-radius: 4px;
 }
 
 .tab-content {
