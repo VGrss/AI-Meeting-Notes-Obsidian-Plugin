@@ -447,6 +447,7 @@ class RecordingView extends ItemView {
 	async onOpen() {
 		const container = this.containerEl.children[1];
 		container.empty();
+		console.log('RecordingView onOpen called, container:', container);
 		
 		const headerEl = container.createDiv('panel-header');
 		headerEl.createEl('h4', { text: 'AI Voice Recording' });
@@ -455,7 +456,6 @@ class RecordingView extends ItemView {
 			text: '×',
 			cls: 'close-panel-btn'
 		});
-		closeBtn.onclick = () => this.leaf.detach();
 
 		const statusEl = container.createDiv('recording-status');
 		const timeEl = statusEl.createEl('div', { 
@@ -467,35 +467,87 @@ class RecordingView extends ItemView {
 		
 		const startBtn = controlsEl.createEl('button', {
 			text: '🎙️ Start Recording',
-			cls: 'start-btn'
+			cls: 'start-btn',
+			attr: { 
+				type: 'button',
+				'aria-label': 'Start Recording'
+			}
 		});
 
 		const pauseBtn = controlsEl.createEl('button', {
 			text: '⏸️ Pause',
 			cls: 'pause-btn',
-			attr: { disabled: 'true' }
+			attr: { 
+				disabled: 'true',
+				type: 'button',
+				'aria-label': 'Pause Recording'
+			}
 		});
 
 		const stopBtn = controlsEl.createEl('button', {
 			text: '⏹️ Stop',
 			cls: 'stop-btn',
-			attr: { disabled: 'true' }
+			attr: { 
+				disabled: 'true',
+				type: 'button',
+				'aria-label': 'Stop Recording'
+			}
 		});
 
 		const historyContainer = container.createDiv('recordings-history');
 		historyContainer.createEl('h4', { text: 'Recording History' });
 		const historyListEl = historyContainer.createDiv('recordings-list');
 
-		startBtn.onclick = () => this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
-		pauseBtn.onclick = () => this.pauseRecording(pauseBtn);
-		stopBtn.onclick = () => this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl);
+		console.log('Setting up Start button event listener, button element:', startBtn);
+		
+		startBtn.addEventListener('click', (e) => {
+			console.log('Start button clicked via addEventListener', e);
+			this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
+		});
+		
+		startBtn.onclick = (e) => {
+			console.log('Start button clicked via onclick', e);
+			this.startRecording(startBtn, pauseBtn, stopBtn, timeEl);
+		};
+		
+		// Test if button is responsive at all
+		startBtn.onmousedown = () => console.log('Start button mousedown');
+		startBtn.onmouseup = () => console.log('Start button mouseup');
+		
+		// Force button to be clickable
+		startBtn.style.pointerEvents = 'auto';
+		startBtn.style.cursor = 'pointer';
+		startBtn.disabled = false;
+		
+		// Add a simple test click handler
+		setTimeout(() => {
+			console.log('Button after setup - disabled:', startBtn.disabled, 'style:', startBtn.style.cssText);
+		}, 100);
+		
+		pauseBtn.addEventListener('click', () => {
+			console.log('Pause button clicked');
+			this.pauseRecording(pauseBtn);
+		});
+		
+		stopBtn.addEventListener('click', () => {
+			console.log('Stop button clicked');
+			this.stopRecording(startBtn, pauseBtn, stopBtn, historyListEl);
+		});
+		
+		closeBtn.addEventListener('click', () => {
+			console.log('Close button clicked - using addEventListener');
+			this.leaf.detach();
+		});
 		
 		this.refreshRecordingHistory(historyListEl);
 	}
 
 	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
+		console.log('RecordingView startRecording called, isRecording:', this.isRecording);
+		
 		if (!this.isRecording) {
 			try {
+				console.log('Creating new VoiceRecorder...');
 				this.recorder = new VoiceRecorder();
 				await this.recorder.start();
 				this.isRecording = true;
@@ -508,10 +560,13 @@ class RecordingView extends ItemView {
 
 				this.startTimer(timeEl);
 				new Notice('Recording started');
+				console.log('Recording started successfully');
 			} catch (error) {
+				console.error('Recording failed:', error);
 				new Notice('Failed to start recording: ' + error.message);
 			}
 		} else if (this.isPaused && this.recorder) {
+			console.log('Resuming paused recording...');
 			this.recorder.resume();
 			this.isPaused = false;
 			pauseBtn.textContent = '⏸️ Pause';
@@ -757,7 +812,16 @@ class VoiceRecorder {
 
 	async start(): Promise<void> {
 		try {
+			console.log('VoiceRecorder: Checking microphone permissions...');
+			
+			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+				throw new Error('getUserMedia not supported in this browser');
+			}
+			
+			console.log('VoiceRecorder: Requesting microphone access...');
 			this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			console.log('VoiceRecorder: Microphone access granted');
+			
 			this.mediaRecorder = new MediaRecorder(this.stream);
 			this.chunks = [];
 
@@ -768,8 +832,16 @@ class VoiceRecorder {
 			};
 
 			this.mediaRecorder.start();
+			console.log('VoiceRecorder: MediaRecorder started');
 		} catch (error) {
-			throw new Error('Failed to access microphone');
+			console.error('VoiceRecorder: Failed to start:', error);
+			if (error.name === 'NotAllowedError') {
+				throw new Error('Microphone access denied. Please allow microphone permissions.');
+			} else if (error.name === 'NotFoundError') {
+				throw new Error('No microphone found. Please connect a microphone.');
+			} else {
+				throw new Error(`Failed to access microphone: ${error.message}`);
+			}
 		}
 	}
 
