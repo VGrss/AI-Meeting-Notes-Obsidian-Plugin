@@ -570,3 +570,58 @@
 	margin-top: 10px;
 }
 
+/* Confirmation Modal Styles */
+.warning-message {
+	margin: 16px 0 24px 0;
+	text-align: center;
+}
+
+.warning-message p {
+	margin: 8px 0;
+	color: var(--text-normal);
+}
+
+.warning-text {
+	color: var(--text-error) !important;
+	font-weight: 500;
+	font-size: 14px;
+}
+
+.modal-buttons {
+	display: flex;
+	gap: 12px;
+	justify-content: center;
+	margin-top: 24px;
+}
+
+.modal-button-secondary {
+	padding: 8px 20px;
+	border: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+	color: var(--text-normal);
+	border-radius: 6px;
+	cursor: pointer;
+	font-weight: 500;
+	transition: all 0.15s ease-in-out;
+}
+
+.modal-button-secondary:hover {
+	background: var(--background-modifier-hover);
+}
+
+.modal-button-danger {
+	padding: 8px 20px;
+	border: 1px solid #dc3545;
+	background: #dc3545;
+	color: white;
+	border-radius: 6px;
+	cursor: pointer;
+	font-weight: 500;
+	transition: all 0.15s ease-in-out;
+}
+
+.modal-button-danger:hover {
+	background: #c82333;
+	border-color: #c82333;
+}
+

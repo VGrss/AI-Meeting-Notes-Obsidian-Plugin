@@ -625,8 +625,10 @@ class RecordingView extends ItemView {
 				new Notice('Failed to start recording: ' + error.message);
 			}
 		} else {
-			// Stop recording (discard)
-			await this.discardRecording(startBtn, pauseBtn, completeBtn, timeEl);
+			// Show confirmation modal before discarding
+			new ConfirmDiscardModal(this.plugin.app, async () => {
+				await this.discardRecording(startBtn, pauseBtn, completeBtn, timeEl);
+			}).open();
 		}
 	}
 
@@ -969,6 +971,52 @@ class VoiceRecorder {
 		}
 		this.mediaRecorder = null;
 		this.chunks = [];
+	}
+}
+
+class ConfirmDiscardModal extends Modal {
+	onConfirm: () => void;
+
+	constructor(app: App, onConfirm: () => void) {
+		super(app);
+		this.onConfirm = onConfirm;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl('h2', { text: '🛑 Discard Recording?' });
+
+		const warningEl = contentEl.createDiv('warning-message');
+		warningEl.createEl('p', { 
+			text: 'Are you sure you want to stop and discard this recording?'
+		});
+		warningEl.createEl('p', { 
+			text: 'This action cannot be undone and the audio will be lost permanently.',
+			cls: 'warning-text'
+		});
+
+		const buttonsEl = contentEl.createDiv('modal-buttons');
+		
+		const cancelBtn = buttonsEl.createEl('button', {
+			text: 'Cancel',
+			cls: 'modal-button-secondary'
+		});
+		
+		const discardBtn = buttonsEl.createEl('button', {
+			text: '🛑 Yes, Discard Recording',
+			cls: 'modal-button-danger'
+		});
+
+		cancelBtn.onclick = () => this.close();
+		discardBtn.onclick = () => {
+			this.onConfirm();
+			this.close();
+		};
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
 	}
 }
 
