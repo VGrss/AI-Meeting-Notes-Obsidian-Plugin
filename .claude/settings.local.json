@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:docs.obsidian.md)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(npm run build:*)",
+      "Bash(cp:*)",
+      "Bash(npm --prefix \"/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vic Brain/.obsidian/plugins/ai-voice-meeting-notes\" run build)"
     ],
     "deny": []
   }

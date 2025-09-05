@@ -66,7 +66,9 @@ class OpenAIService {
 				model: 'gpt-4o',
 				messages: [{
 					role: 'user',
-					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary that includes:
+					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary using the EXACT SAME LANGUAGE as the transcript (if transcript is in French, respond in French; if in Spanish, respond in Spanish, etc.).
+
+Structure your response with these sections:
 
 1. **Main Topics Discussed**: What were the primary subjects covered?
 2. **Key Points**: The most important information shared
@@ -74,7 +76,7 @@ class OpenAIService {
 4. **Action Items**: Tasks or next steps identified (if any)
 5. **Context & Insights**: Important context or insights that emerged
 
-Please format your response clearly and focus on extracting meaningful content from the discussion. Keep the same language as the transcript.
+CRITICAL: Your entire response must be in the same language as the transcript. Do not translate or use English if the transcript is in another language.
 
 **Transcript:**
 ${transcript}`
