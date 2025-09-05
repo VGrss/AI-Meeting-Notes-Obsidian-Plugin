@@ -869,7 +869,7 @@ class RecordingView extends ItemView {
 				cls: 'copy-button',
 				attr: { title: `Copy ${currentTab} to clipboard` }
 			});
-			copyButton.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M16 4H18A2 2 0 0 1 20 6V18A2 2 0 0 1 18 20H6A2 2 0 0 1 4 18V6A2 2 0 0 1 6 4H8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>';
+			copyButton.textContent = '📋';
 
 			// Event handlers
 			summaryTab.onclick = (e) => {
