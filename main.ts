@@ -1,7 +1,10 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView } from 'obsidian';
+import * as Sentry from '@sentry/browser';
 
 interface VoiceNotesSettings {
 	openaiApiKey: string;
+	glitchTipDsn: string;
+	enableErrorTracking: boolean;
 }
 
 interface RecordingData {
@@ -14,59 +17,179 @@ interface RecordingData {
 }
 
 const DEFAULT_SETTINGS: VoiceNotesSettings = {
-	openaiApiKey: ''
+	openaiApiKey: '',
+	glitchTipDsn: '',
+	enableErrorTracking: true
 }
 
 const RECORDING_VIEW_TYPE = 'voice-recording-view';
 
+class ErrorTrackingService {
+	private isInitialized = false;
+
+	init(dsn: string, enabled: boolean) {
+		if (!enabled || !dsn || this.isInitialized) return;
+
+		try {
+			Sentry.init({
+				dsn: dsn,
+				environment: 'production',
+				integrations: [
+					Sentry.browserTracingIntegration(),
+				],
+				tracesSampleRate: 0.1,
+				beforeSend(event) {
+					if (event.exception) {
+						const error = event.exception.values?.[0];
+						if (error) {
+							console.error('Error captured by GlitchTip:', error);
+						}
+					}
+					return event;
+				}
+			});
+			
+			Sentry.setTag('plugin', 'ai-voice-meeting-notes');
+			this.isInitialized = true;
+			console.log('GlitchTip error tracking initialized');
+		} catch (error) {
+			console.error('Failed to initialize GlitchTip:', error);
+		}
+	}
+
+	captureError(error: Error, context?: Record<string, any>) {
+		if (!this.isInitialized) {
+			console.error('Error (tracking disabled):', error);
+			return;
+		}
+
+		Sentry.withScope((scope) => {
+			if (context) {
+				Object.entries(context).forEach(([key, value]) => {
+					scope.setExtra(key, value);
+				});
+			}
+			Sentry.captureException(error);
+		});
+	}
+
+	captureMessage(message: string, level: 'info' | 'warning' | 'error' = 'info', context?: Record<string, any>) {
+		if (!this.isInitialized) {
+			console.log(`Message (tracking disabled): ${message}`);
+			return;
+		}
+
+		Sentry.withScope((scope) => {
+			scope.setLevel(level);
+			if (context) {
+				Object.entries(context).forEach(([key, value]) => {
+					scope.setExtra(key, value);
+				});
+			}
+			Sentry.captureMessage(message);
+		});
+	}
+
+	setUserContext(userId: string, userData?: Record<string, any>) {
+		if (!this.isInitialized) return;
+		
+		Sentry.setUser({
+			id: userId,
+			...userData
+		});
+	}
+}
+
 class OpenAIService {
 	private apiKey: string;
+	private errorTracker?: ErrorTrackingService;
 
-	constructor(apiKey: string) {
+	constructor(apiKey: string, errorTracker?: ErrorTrackingService) {
 		this.apiKey = apiKey;
+		this.errorTracker = errorTracker;
 	}
 
 	async transcribeAudio(audioBlob: Blob): Promise<string> {
-		if (!this.apiKey) {
-			throw new Error('OpenAI API key not configured');
+		try {
+			if (!this.apiKey) {
+				const error = new Error('OpenAI API key not configured');
+				this.errorTracker?.captureError(error, { 
+					function: 'transcribeAudio',
+					reason: 'missing_api_key' 
+				});
+				throw error;
+			}
+
+			const formData = new FormData();
+			formData.append('file', audioBlob, 'recording.wav');
+			formData.append('model', 'whisper-1');
+
+			const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${this.apiKey}`,
+				},
+				body: formData
+			});
+
+			if (!response.ok) {
+				const error = new Error(`Transcription failed: ${response.statusText}`);
+				this.errorTracker?.captureError(error, {
+					function: 'transcribeAudio',
+					httpStatus: response.status,
+					responseText: response.statusText,
+					audioBlobSize: audioBlob.size
+				});
+				throw error;
+			}
+
+			const result = await response.json();
+			
+			// Log successful transcription
+			this.errorTracker?.captureMessage('Audio transcription completed successfully', 'info', {
+				function: 'transcribeAudio',
+				audioBlobSize: audioBlob.size,
+				transcriptLength: result.text?.length || 0
+			});
+			
+			return result.text;
+		} catch (error) {
+			if (error instanceof Error) {
+				// Only capture if not already captured above
+				if (!error.message.includes('OpenAI API key') && !error.message.includes('Transcription failed')) {
+					this.errorTracker?.captureError(error, {
+						function: 'transcribeAudio',
+						audioBlobSize: audioBlob.size,
+						errorType: 'unexpected'
+					});
+				}
+			}
+			throw error;
 		}
-
-		const formData = new FormData();
-		formData.append('file', audioBlob, 'recording.wav');
-		formData.append('model', 'whisper-1');
-
-		const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${this.apiKey}`,
-			},
-			body: formData
-		});
-
-		if (!response.ok) {
-			throw new Error(`Transcription failed: ${response.statusText}`);
-		}
-
-		const result = await response.json();
-		return result.text;
 	}
 
 	async generateSummary(transcript: string): Promise<string> {
-		if (!this.apiKey) {
-			throw new Error('OpenAI API key not configured');
-		}
+		try {
+			if (!this.apiKey) {
+				const error = new Error('OpenAI API key not configured');
+				this.errorTracker?.captureError(error, { 
+					function: 'generateSummary',
+					reason: 'missing_api_key' 
+				});
+				throw error;
+			}
 
-		const response = await fetch('https://api.openai.com/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${this.apiKey}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				model: 'gpt-4o',
-				messages: [{
-					role: 'user',
-					content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary using the EXACT SAME LANGUAGE as the transcript (if transcript is in French, respond in French; if in Spanish, respond in Spanish, etc.).
+			const response = await fetch('https://api.openai.com/v1/chat/completions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${this.apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					model: 'gpt-4o',
+					messages: [{
+						role: 'user',
+						content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary using the EXACT SAME LANGUAGE as the transcript (if transcript is in French, respond in French; if in Spanish, respond in Spanish, etc.).
 
 Structure your response with these sections:
 
@@ -80,55 +203,117 @@ CRITICAL: Your entire response must be in the same language as the transcript. D
 
 **Transcript:**
 ${transcript}`
-				}],
-				max_tokens: 800,
-				temperature: 0.3
-			})
-		});
+					}],
+					max_tokens: 800,
+					temperature: 0.3
+				})
+			});
 
-		if (!response.ok) {
-			throw new Error(`Summary generation failed: ${response.statusText}`);
+			if (!response.ok) {
+				const error = new Error(`Summary generation failed: ${response.statusText}`);
+				this.errorTracker?.captureError(error, {
+					function: 'generateSummary',
+					httpStatus: response.status,
+					responseText: response.statusText,
+					transcriptLength: transcript.length
+				});
+				throw error;
+			}
+
+			const result = await response.json();
+			
+			// Log successful summary generation
+			this.errorTracker?.captureMessage('AI summary generated successfully', 'info', {
+				function: 'generateSummary',
+				transcriptLength: transcript.length,
+				summaryLength: result.choices[0].message.content?.length || 0
+			});
+			
+			return result.choices[0].message.content;
+		} catch (error) {
+			if (error instanceof Error) {
+				// Only capture if not already captured above
+				if (!error.message.includes('OpenAI API key') && !error.message.includes('Summary generation failed')) {
+					this.errorTracker?.captureError(error, {
+						function: 'generateSummary',
+						transcriptLength: transcript.length,
+						errorType: 'unexpected'
+					});
+				}
+			}
+			throw error;
 		}
-
-		const result = await response.json();
-		return result.choices[0].message.content;
 	}
 
 	async generateTopic(transcript: string): Promise<string> {
-		if (!this.apiKey) {
-			throw new Error('OpenAI API key not configured');
-		}
+		try {
+			if (!this.apiKey) {
+				const error = new Error('OpenAI API key not configured');
+				this.errorTracker?.captureError(error, { 
+					function: 'generateTopic',
+					reason: 'missing_api_key' 
+				});
+				throw error;
+			}
 
-		const response = await fetch('https://api.openai.com/v1/chat/completions', {
-			method: 'POST',
-			headers: {
-				'Authorization': `Bearer ${this.apiKey}`,
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				model: 'gpt-4o',
-				messages: [{
-					role: 'user',
-					content: `Based on this voice recording transcript, provide a very short 2-word topic summary that captures the main subject discussed. Use the same language as the transcript.
+			const response = await fetch('https://api.openai.com/v1/chat/completions', {
+				method: 'POST',
+				headers: {
+					'Authorization': `Bearer ${this.apiKey}`,
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					model: 'gpt-4o',
+					messages: [{
+						role: 'user',
+						content: `Based on this voice recording transcript, provide a very short 2-word topic summary that captures the main subject discussed. Use the same language as the transcript.
 
 Examples: "Project Planning", "Team Meeting", "Client Call", "Budget Review"
 
 **Transcript:**
 ${transcript}`
-				}],
-				max_tokens: 10,
-				temperature: 0.1
-			})
-		});
+					}],
+					max_tokens: 10,
+					temperature: 0.1
+				})
+			});
 
-		if (!response.ok) {
-			throw new Error(`Topic generation failed: ${response.statusText}`);
+			if (!response.ok) {
+				const error = new Error(`Topic generation failed: ${response.statusText}`);
+				this.errorTracker?.captureError(error, {
+					function: 'generateTopic',
+					httpStatus: response.status,
+					responseText: response.statusText,
+					transcriptLength: transcript.length
+				});
+				throw error;
+			}
+
+			const result = await response.json();
+			const topic = result.choices[0].message.content.trim();
+			const cleanTopic = topic.replace(/^["']|["']$/g, '');
+			
+			// Log successful topic generation
+			this.errorTracker?.captureMessage('Topic generated successfully', 'info', {
+				function: 'generateTopic',
+				transcriptLength: transcript.length,
+				generatedTopic: cleanTopic
+			});
+			
+			return cleanTopic;
+		} catch (error) {
+			if (error instanceof Error) {
+				// Only capture if not already captured above
+				if (!error.message.includes('OpenAI API key') && !error.message.includes('Topic generation failed')) {
+					this.errorTracker?.captureError(error, {
+						function: 'generateTopic',
+						transcriptLength: transcript.length,
+						errorType: 'unexpected'
+					});
+				}
+			}
+			throw error;
 		}
-
-		const result = await response.json();
-		const topic = result.choices[0].message.content.trim();
-		// Remove quotes if present
-		return topic.replace(/^["']|["']$/g, '');
 	}
 }
 
@@ -137,9 +322,14 @@ export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
 	statusBarItem: HTMLElement;
 	recordings: RecordingData[] = [];
+	errorTracker: ErrorTrackingService;
 
 	async onload() {
 		await this.loadSettings();
+		
+		// Initialize error tracking
+		this.errorTracker = new ErrorTrackingService();
+		this.errorTracker.init(this.settings.glitchTipDsn, this.settings.enableErrorTracking);
 
 		this.addRibbonIcon('mic', 'Open Voice Recording Panel', (evt: MouseEvent) => {
 			this.activateRecordingView();
@@ -282,7 +472,7 @@ class RecordingModal extends Modal {
 	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
 		if (!this.isRecording) {
 			try {
-				this.recorder = new VoiceRecorder();
+				this.recorder = new VoiceRecorder(this.plugin.errorTracker);
 				await this.recorder.start();
 				this.isRecording = true;
 				this.isPaused = false;
@@ -363,7 +553,7 @@ class RecordingModal extends Modal {
 
 	async processRecording(audioBlob: Blob) {
 		try {
-			const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey);
+			const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
 			const transcript = await openaiService.transcribeAudio(audioBlob);
 			new TranscriptModal(this.app, this.plugin, transcript).open();
 		} catch (error) {
@@ -443,7 +633,7 @@ class TranscriptModal extends Modal {
 	}
 
 	async generateSummary(): Promise<string> {
-		const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey);
+		const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
 		return await openaiService.generateSummary(this.transcript);
 	}
 
@@ -608,7 +798,7 @@ class RecordingView extends ItemView {
 		if (!this.isRecording) {
 			// Start recording
 			try {
-				this.recorder = new VoiceRecorder();
+				this.recorder = new VoiceRecorder(this.plugin.errorTracker);
 				await this.recorder.start();
 				this.isRecording = true;
 				this.isPaused = false;
@@ -711,7 +901,7 @@ class RecordingView extends ItemView {
 			new Notice('Recording complete. Processing...');
 			
 			try {
-				const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey);
+				const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
 				
 				// Step 1: Transcribe audio
 				const transcript = await openaiService.transcribeAudio(audioBlob);
@@ -908,12 +1098,22 @@ class VoiceRecorder {
 	mediaRecorder: MediaRecorder | null = null;
 	stream: MediaStream | null = null;
 	chunks: Blob[] = [];
+	private errorTracker?: ErrorTrackingService;
+
+	constructor(errorTracker?: ErrorTrackingService) {
+		this.errorTracker = errorTracker;
+	}
 
 	async start(): Promise<void> {
 		try {
-			
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-				throw new Error('getUserMedia not supported in this browser');
+				const error = new Error('getUserMedia not supported in this browser');
+				this.errorTracker?.captureError(error, {
+					function: 'VoiceRecorder.start',
+					reason: 'getUserMedia_not_supported',
+					userAgent: navigator.userAgent
+				});
+				throw error;
 			}
 			
 			this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -927,15 +1127,43 @@ class VoiceRecorder {
 				}
 			};
 
+			this.mediaRecorder.onerror = (event) => {
+				const error = new Error(`MediaRecorder error: ${event.type}`);
+				this.errorTracker?.captureError(error, {
+					function: 'VoiceRecorder.mediaRecorder.onerror',
+					eventType: event.type
+				});
+			};
+
 			this.mediaRecorder.start();
+			
+			// Log successful start
+			this.errorTracker?.captureMessage('Voice recording started successfully', 'info', {
+				function: 'VoiceRecorder.start'
+			});
+			
 		} catch (error) {
+			let enhancedError: Error;
+			let errorContext: Record<string, any> = {
+				function: 'VoiceRecorder.start',
+				userAgent: navigator.userAgent
+			};
+
 			if (error.name === 'NotAllowedError') {
-				throw new Error('Microphone access denied. Please allow microphone permissions.');
+				enhancedError = new Error('Microphone access denied. Please allow microphone permissions.');
+				errorContext.reason = 'microphone_access_denied';
 			} else if (error.name === 'NotFoundError') {
-				throw new Error('No microphone found. Please connect a microphone.');
+				enhancedError = new Error('No microphone found. Please connect a microphone.');
+				errorContext.reason = 'no_microphone_found';
 			} else {
-				throw new Error(`Failed to access microphone: ${error.message}`);
+				enhancedError = new Error(`Failed to access microphone: ${error.message}`);
+				errorContext.reason = 'microphone_access_failed';
+				errorContext.originalError = error.message;
+				errorContext.errorName = error.name;
 			}
+
+			this.errorTracker?.captureError(enhancedError, errorContext);
+			throw enhancedError;
 		}
 	}
 
@@ -1069,6 +1297,51 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 
 		containerEl.createEl('p', {
 			text: '💡 Need an API key? Visit the OpenAI Platform above to create your account and get your API key.',
+			cls: 'help-text'
+		});
+
+		// Error Tracking Section
+		containerEl.createEl('h3', { text: 'Error Tracking (Optional)' });
+		
+		containerEl.createEl('p', {
+			text: 'Configure GlitchTip error tracking to monitor issues and improve reliability. This helps identify problems like transcription failures.',
+			cls: 'setting-description'
+		});
+
+		new Setting(containerEl)
+			.setName('Enable Error Tracking')
+			.setDesc('Enable GlitchTip error tracking to monitor application issues')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableErrorTracking)
+				.onChange(async (value) => {
+					this.plugin.settings.enableErrorTracking = value;
+					await this.plugin.saveSettings();
+					// Reinitialize error tracking with new setting
+					this.plugin.errorTracker.init(this.plugin.settings.glitchTipDsn, value);
+				}));
+
+		new Setting(containerEl)
+			.setName('GlitchTip DSN')
+			.setDesc('Data Source Name (DSN) for your GlitchTip project')
+			.addText(text => {
+				text.setPlaceholder('https://your-key@your-glitchtip-instance.com/project-id');
+				text.setValue(this.plugin.settings.glitchTipDsn || '');
+				text.onChange(async (value) => {
+					this.plugin.settings.glitchTipDsn = value;
+					await this.plugin.saveSettings();
+					// Reinitialize error tracking with new DSN
+					this.plugin.errorTracker.init(value, this.plugin.settings.enableErrorTracking);
+				});
+			})
+			.addExtraButton(button => button
+				.setIcon('external-link')
+				.setTooltip('Learn about GlitchTip')
+				.onClick(() => {
+					window.open('https://glitchtip.com/', '_blank');
+				}));
+
+		containerEl.createEl('p', {
+			text: '💡 GlitchTip is an open-source error tracking service. You can use the hosted service or self-host it.',
 			cls: 'help-text'
 		});
 	}

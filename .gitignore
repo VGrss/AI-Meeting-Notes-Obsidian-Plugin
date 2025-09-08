@@ -52,3 +52,9 @@ node_modules/
 
 # Windows
 Thumbs.db
+
+# Local configuration (contains sensitive data)
+config.local.json
+.env
+.env.local
+GLITCHTIP_SETUP.md

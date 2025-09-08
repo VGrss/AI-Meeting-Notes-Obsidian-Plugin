@@ -1,6 +1,6 @@
 {
 	"name": "ai-voice-meeting-notes",
-	"version": "1.5.5",
+	"version": "1.6.0",
 	"description": "Record, transcribe, and summarize voice meetings with AI integration",
 	"main": "main.js",
 	"scripts": {
@@ -20,5 +20,9 @@
 		"obsidian": "latest",
 		"tslib": "2.4.0",
 		"typescript": "4.7.4"
+	},
+	"dependencies": {
+		"@sentry/browser": "^10.10.0",
+		"@sentry/tracing": "^7.120.4"
 	}
 }
