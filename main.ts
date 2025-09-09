@@ -103,10 +103,55 @@ class ErrorTrackingService {
 class OpenAIService {
 	private apiKey: string;
 	private errorTracker?: ErrorTrackingService;
+	
+	// OpenAI Whisper limits: 25MB max file size
+	private readonly MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB in bytes
+	private readonly RECOMMENDED_MAX_SIZE = 20 * 1024 * 1024; // 20MB recommended limit
 
 	constructor(apiKey: string, errorTracker?: ErrorTrackingService) {
 		this.apiKey = apiKey;
 		this.errorTracker = errorTracker;
+	}
+
+	private checkFileSize(audioBlob: Blob): { canUpload: boolean; message?: string; recommendation?: string } {
+		const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
+		
+		if (audioBlob.size > this.MAX_FILE_SIZE) {
+			return {
+				canUpload: false,
+				message: `Audio file is too large (${sizeMB}MB). OpenAI Whisper has a 25MB limit.`,
+				recommendation: "Try recording shorter segments (under 10 minutes) or use lower quality settings."
+			};
+		}
+		
+		if (audioBlob.size > this.RECOMMENDED_MAX_SIZE) {
+			return {
+				canUpload: true,
+				message: `Audio file is large (${sizeMB}MB). This may take longer to process.`,
+				recommendation: "For faster processing, consider shorter recordings."
+			};
+		}
+		
+		return { canUpload: true };
+	}
+
+	async transcribeWithChunking(audioBlob: Blob, maxChunkSize = 15 * 1024 * 1024): Promise<string> {
+		const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
+		
+		// If file is small enough, use regular transcription
+		if (audioBlob.size <= maxChunkSize) {
+			return this.transcribeAudio(audioBlob);
+		}
+
+		this.errorTracker?.captureMessage('Large file detected, chunking not yet implemented', 'warning', {
+			function: 'transcribeWithChunking',
+			fileSizeMB: sizeMB,
+			maxChunkSizeMB: (maxChunkSize / (1024 * 1024)).toFixed(1)
+		});
+
+		// For now, try regular upload and let it fail with helpful message
+		// TODO: Implement actual chunking by splitting audio file
+		return this.transcribeAudio(audioBlob);
 	}
 
 	async transcribeAudio(audioBlob: Blob): Promise<string> {
@@ -118,6 +163,31 @@ class OpenAIService {
 					reason: 'missing_api_key' 
 				});
 				throw error;
+			}
+
+			// Pre-flight size check
+			const sizeCheck = this.checkFileSize(audioBlob);
+			const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
+			
+			if (!sizeCheck.canUpload) {
+				const error = new Error(`${sizeCheck.message}\n\n${sizeCheck.recommendation}`);
+				this.errorTracker?.captureError(error, {
+					function: 'transcribeAudio',
+					reason: 'file_too_large',
+					fileSizeMB: sizeMB,
+					fileSizeBytes: audioBlob.size
+				});
+				throw error;
+			}
+			
+			// Log warning for large files
+			if (sizeCheck.message) {
+				this.errorTracker?.captureMessage('Large file upload attempt', 'warning', {
+					function: 'transcribeAudio',
+					fileSizeMB: sizeMB,
+					message: sizeCheck.message,
+					recommendation: sizeCheck.recommendation
+				});
 			}
 
 			const formData = new FormData();
@@ -133,12 +203,30 @@ class OpenAIService {
 			});
 
 			if (!response.ok) {
-				const error = new Error(`Transcription failed: ${response.statusText}`);
+				const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
+				let errorMessage: string;
+				
+				// Handle specific HTTP status codes with helpful messages
+				if (response.status === 413) {
+					errorMessage = `Audio file is too large to transcribe (${sizeMB}MB).\n\nSolutions:\n• Record shorter segments (under 10 minutes)\n• Use lower quality settings in your browser\n• Break long recordings into smaller parts`;
+				} else if (response.status === 400) {
+					errorMessage = `Audio format not supported or file corrupted.\n\nTry:\n• Re-recording with different settings\n• Ensuring your microphone works properly`;
+				} else if (response.status === 429) {
+					errorMessage = `Rate limit exceeded. Please wait a moment before trying again.`;
+				} else if (response.status >= 500) {
+					errorMessage = `OpenAI service is temporarily unavailable (${response.status}).\n\nPlease try again in a few minutes.`;
+				} else {
+					errorMessage = `Transcription failed (${response.status}): ${response.statusText}`;
+				}
+				
+				const error = new Error(errorMessage);
 				this.errorTracker?.captureError(error, {
 					function: 'transcribeAudio',
 					httpStatus: response.status,
 					responseText: response.statusText,
-					audioBlobSize: audioBlob.size
+					fileSizeMB: sizeMB,
+					audioBlobSize: audioBlob.size,
+					helpfulErrorHandling: true
 				});
 				throw error;
 			}
@@ -554,7 +642,7 @@ class RecordingModal extends Modal {
 	async processRecording(audioBlob: Blob) {
 		try {
 			const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
-			const transcript = await openaiService.transcribeAudio(audioBlob);
+			const transcript = await openaiService.transcribeWithChunking(audioBlob);
 			new TranscriptModal(this.app, this.plugin, transcript).open();
 		} catch (error) {
 			new Notice('Transcription failed: ' + error.message);
@@ -904,7 +992,7 @@ class RecordingView extends ItemView {
 				const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
 				
 				// Step 1: Transcribe audio
-				const transcript = await openaiService.transcribeAudio(audioBlob);
+				const transcript = await openaiService.transcribeWithChunking(audioBlob);
 				
 				// Update card with transcript and start summary processing
 				processingRecording.transcript = transcript;
@@ -1099,9 +1187,53 @@ class VoiceRecorder {
 	stream: MediaStream | null = null;
 	chunks: Blob[] = [];
 	private errorTracker?: ErrorTrackingService;
+	
+	// Audio compression settings for smaller file sizes
+	private readonly AUDIO_SETTINGS = {
+		mimeType: 'audio/webm;codecs=opus', // Opus codec for better compression
+		audioBitsPerSecond: 32000, // 32 kbps for good quality/size balance
+	};
+	
+	// Chunking settings for long recordings
+	private readonly CHUNK_DURATION_MS = 120000; // 2 minutes per chunk
+	private isChunking = false;
+	private chunkStartTime = 0;
+
+	// Fallback settings if primary format not supported
+	private readonly FALLBACK_SETTINGS = [
+		{ mimeType: 'audio/mp4;codecs=mp4a.40.2', audioBitsPerSecond: 32000 }, // AAC
+		{ mimeType: 'audio/webm', audioBitsPerSecond: 32000 }, // WebM default
+		{ mimeType: 'audio/mp4', audioBitsPerSecond: 32000 }, // MP4 default
+	];
 
 	constructor(errorTracker?: ErrorTrackingService) {
 		this.errorTracker = errorTracker;
+	}
+
+	private getBestAudioSettings(): MediaRecorderOptions {
+		// Try preferred settings first
+		if (MediaRecorder.isTypeSupported(this.AUDIO_SETTINGS.mimeType)) {
+			return this.AUDIO_SETTINGS;
+		}
+		
+		// Try fallback options
+		for (const settings of this.FALLBACK_SETTINGS) {
+			if (MediaRecorder.isTypeSupported(settings.mimeType)) {
+				this.errorTracker?.captureMessage('Using fallback audio settings', 'warning', {
+					function: 'VoiceRecorder.getBestAudioSettings',
+					selectedSettings: settings
+				});
+				return settings;
+			}
+		}
+		
+		// Use browser default if nothing else works
+		this.errorTracker?.captureMessage('Using default audio settings (no compression)', 'warning', {
+			function: 'VoiceRecorder.getBestAudioSettings',
+			reason: 'no_supported_formats'
+		});
+		
+		return {}; // Browser default
 	}
 
 	async start(): Promise<void> {
@@ -1116,10 +1248,26 @@ class VoiceRecorder {
 				throw error;
 			}
 			
-			this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			// Request mono audio at lower sample rate for smaller files
+			this.stream = await navigator.mediaDevices.getUserMedia({ 
+				audio: {
+					channelCount: 1, // Mono audio
+					sampleRate: 16000, // 16kHz sample rate (adequate for speech)
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true
+				}
+			});
 			
-			this.mediaRecorder = new MediaRecorder(this.stream);
+			// Find the best supported audio format
+			const audioSettings = this.getBestAudioSettings();
+			this.mediaRecorder = new MediaRecorder(this.stream, audioSettings);
 			this.chunks = [];
+			
+			this.errorTracker?.captureMessage('Recording started with optimized settings', 'info', {
+				function: 'VoiceRecorder.start',
+				audioSettings: audioSettings
+			});
 
 			this.mediaRecorder.ondataavailable = (event) => {
 				if (event.data.size > 0) {
@@ -1135,11 +1283,14 @@ class VoiceRecorder {
 				});
 			};
 
-			this.mediaRecorder.start();
+			// Start recording with chunking for better file size management
+			this.mediaRecorder.start(this.CHUNK_DURATION_MS);
+			this.chunkStartTime = Date.now();
 			
 			// Log successful start
 			this.errorTracker?.captureMessage('Voice recording started successfully', 'info', {
-				function: 'VoiceRecorder.start'
+				function: 'VoiceRecorder.start',
+				chunkDurationMs: this.CHUNK_DURATION_MS
 			});
 			
 		} catch (error) {
