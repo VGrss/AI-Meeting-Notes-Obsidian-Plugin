@@ -426,7 +426,6 @@ export default class VoiceNotesPlugin extends Plugin {
 		this.addCommand({
 			id: 'toggle-recording-panel',
 			name: 'Toggle Voice Recording Panel',
-			hotkeys: [{ modifiers: ["Mod", "Shift"], key: "r" }],
 			callback: () => {
 				this.toggleRecordingView();
 			}
@@ -451,7 +450,7 @@ export default class VoiceNotesPlugin extends Plugin {
 		this.statusBarItem.onClickEvent(() => {
 			this.toggleRecordingView();
 		});
-		this.statusBarItem.setAttribute('title', 'Toggle Voice Recording Panel (Cmd+Shift+R)');
+		this.statusBarItem.setAttribute('title', 'Toggle Voice Recording Panel');
 
 		this.addSettingTab(new VoiceNotesSettingTab(this.app, this));
 	}
@@ -819,7 +818,24 @@ class RecordingView extends ItemView {
 				'aria-label': 'Close Panel'
 			}
 		});
-		closeBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+		// Create close SVG icon using DOM API
+		const closeSvg = closeBtn.createSvg('svg', {
+			attr: {
+				width: '16',
+				height: '16',
+				viewBox: '0 0 24 24',
+				fill: 'none'
+			}
+		});
+		closeSvg.createSvg('path', {
+			attr: {
+				d: 'M18 6L6 18M6 6L18 18',
+				stroke: 'currentColor',
+				'stroke-width': '2',
+				'stroke-linecap': 'round',
+				'stroke-linejoin': 'round'
+			}
+		});
 
 		// 2. Timer & Controls Section
 		const timerControlsSection = container.createDiv('timer-controls-section');
@@ -1091,11 +1107,31 @@ class RecordingView extends ItemView {
 		const header = card.createDiv('card-header');
 		header.onclick = () => this.toggleCardCollapse(recording.id);
 		
-		// Chevron icon
+		// Chevron icon using DOM API
 		const chevron = header.createDiv('chevron-icon');
-		chevron.innerHTML = isCollapsed ? 
-			'<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' :
-			'<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+		const chevronSvg = chevron.createSvg('svg', {
+			attr: {
+				width: '12',
+				height: '12',
+				viewBox: '0 0 12 12',
+				fill: 'none'
+			}
+		});
+		
+		// Create different path based on collapsed state
+		const pathData = isCollapsed ? 
+			'M4.5 3L7.5 6L4.5 9' : 
+			'M3 4.5L6 7.5L9 4.5';
+		
+		chevronSvg.createSvg('path', {
+			attr: {
+				d: pathData,
+				stroke: 'currentColor',
+				'stroke-width': '1.5',
+				'stroke-linecap': 'round',
+				'stroke-linejoin': 'round'
+			}
+		});
 		
 		// Title (topic)
 		const title = header.createEl('span', { 
@@ -1120,12 +1156,77 @@ class RecordingView extends ItemView {
 			const summaryTab = tabContainer.createEl('button', {
 				cls: `tab-button ${currentTab === 'summary' ? 'active' : ''}`,
 			});
-			summaryTab.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>AI Summary</span>';
+			
+			// Create summary tab icon using DOM API
+			const summarySvg = summaryTab.createSvg('svg', {
+				attr: {
+					width: '10',
+					height: '10',
+					viewBox: '0 0 24 24',
+					fill: 'none'
+				}
+			});
+			summarySvg.createSvg('path', {
+				attr: {
+					d: 'M12 2L2 7L12 12L22 7L12 2Z',
+					stroke: 'currentColor',
+					'stroke-width': '2',
+					'stroke-linecap': 'round',
+					'stroke-linejoin': 'round'
+				}
+			});
+			summarySvg.createSvg('path', {
+				attr: {
+					d: 'M2 17L12 22L22 17',
+					stroke: 'currentColor',
+					'stroke-width': '2',
+					'stroke-linecap': 'round',
+					'stroke-linejoin': 'round'
+				}
+			});
+			summarySvg.createSvg('path', {
+				attr: {
+					d: 'M2 12L12 17L22 12',
+					stroke: 'currentColor',
+					'stroke-width': '2',
+					'stroke-linecap': 'round',
+					'stroke-linejoin': 'round'
+				}
+			});
+			summaryTab.createEl('span', { text: 'AI Summary' });
 			
 			const transcriptTab = tabContainer.createEl('button', {
 				cls: `tab-button ${currentTab === 'transcript' ? 'active' : ''}`,
 			});
-			transcriptTab.innerHTML = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M14 2H6A2 2 0 0 0 4 4V20A2 2 0 0 0 6 22H18A2 2 0 0 0 20 20V8L14 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 2V8H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Transcript</span>';
+			
+			// Create transcript tab icon using DOM API
+			const transcriptSvg = transcriptTab.createSvg('svg', {
+				attr: {
+					width: '10',
+					height: '10',
+					viewBox: '0 0 24 24',
+					fill: 'none'
+				}
+			});
+			transcriptSvg.createSvg('path', {
+				attr: {
+					d: 'M14 2H6A2 2 0 0 0 4 4V20A2 2 0 0 0 6 22H18A2 2 0 0 0 20 20V8L14 2Z',
+					stroke: 'currentColor',
+					'stroke-width': '2',
+					'stroke-linecap': 'round',
+					'stroke-linejoin': 'round'
+				}
+			});
+			transcriptSvg.createSvg('path', {
+				attr: {
+					d: 'M14 2V8H20',
+					stroke: 'currentColor',
+					'stroke-width': '2',
+					'stroke-linecap': 'round',
+					'stroke-linejoin': 'round'
+				}
+			});
+			transcriptTab.createEl('span', { text: 'Transcript' });
 
 			// Content area with hover-activated copy button
 			const contentArea = content.createDiv('content-area group');
