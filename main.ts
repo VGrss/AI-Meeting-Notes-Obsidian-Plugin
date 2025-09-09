@@ -267,6 +267,31 @@ class OpenAIService {
 				throw error;
 			}
 
+			// Handle very long transcripts by intelligent truncation
+			let processedTranscript = transcript;
+			const maxTokensForContext = 12000; // GPT-4o has ~128k context, be conservative
+			const avgCharsPerToken = 4; // Rough estimate
+			const maxCharsForContext = maxTokensForContext * avgCharsPerToken;
+			
+			if (transcript.length > maxCharsForContext) {
+				// For very long transcripts, take a balanced sample
+				const firstPart = transcript.substring(0, maxCharsForContext * 0.4);
+				const lastPart = transcript.substring(transcript.length - maxCharsForContext * 0.4);
+				const middlePart = transcript.substring(
+					Math.floor(transcript.length * 0.4), 
+					Math.floor(transcript.length * 0.6)
+				).substring(0, maxCharsForContext * 0.2);
+				
+				processedTranscript = `${firstPart}\n\n[...MIDDLE SECTION SUMMARY...]\n${middlePart}\n\n[...CONTINUED...]\n${lastPart}`;
+				
+				this.errorTracker?.captureMessage('Long transcript truncated for summary', 'warning', {
+					function: 'generateSummary',
+					originalLength: transcript.length,
+					processedLength: processedTranscript.length,
+					truncationRatio: (processedTranscript.length / transcript.length).toFixed(2)
+				});
+			}
+
 			const response = await fetch('https://api.openai.com/v1/chat/completions', {
 				method: 'POST',
 				headers: {
@@ -290,9 +315,9 @@ Structure your response with these sections:
 CRITICAL: Your entire response must be in the same language as the transcript. Do not translate or use English if the transcript is in another language.
 
 **Transcript:**
-${transcript}`
+${processedTranscript}`
 					}],
-					max_tokens: 800,
+					max_tokens: 2000, // Increased from 800 to allow for comprehensive summaries
 					temperature: 0.3
 				})
 			});
@@ -313,8 +338,10 @@ ${transcript}`
 			// Log successful summary generation
 			this.errorTracker?.captureMessage('AI summary generated successfully', 'info', {
 				function: 'generateSummary',
-				transcriptLength: transcript.length,
-				summaryLength: result.choices[0].message.content?.length || 0
+				originalTranscriptLength: transcript.length,
+				processedTranscriptLength: processedTranscript.length,
+				summaryLength: result.choices[0].message.content?.length || 0,
+				wasTruncated: transcript.length !== processedTranscript.length
 			});
 			
 			return result.choices[0].message.content;
