@@ -5,6 +5,7 @@ interface VoiceNotesSettings {
 	openaiApiKey: string;
 	glitchTipDsn: string;
 	enableErrorTracking: boolean;
+	customSummaryPrompt: string;
 }
 
 interface RecordingData {
@@ -16,10 +17,23 @@ interface RecordingData {
 	topic: string;
 }
 
+const DEFAULT_SUMMARY_PROMPT = `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary using the EXACT SAME LANGUAGE as the transcript (if transcript is in French, respond in French; if in Spanish, respond in Spanish, etc.).
+
+Structure your response with these sections:
+
+1. **Main Topics Discussed**: What were the primary subjects covered?
+2. **Key Points**: The most important information shared
+3. **Decisions Made**: Any conclusions or agreements reached
+4. **Action Items**: Tasks or next steps identified (if any)
+5. **Context & Insights**: Important context or insights that emerged
+
+CRITICAL: Your entire response must be in the same language as the transcript. Do not translate or use English if the transcript is in another language.`;
+
 const DEFAULT_SETTINGS: VoiceNotesSettings = {
 	openaiApiKey: '',
 	glitchTipDsn: '',
-	enableErrorTracking: true
+	enableErrorTracking: true,
+	customSummaryPrompt: DEFAULT_SUMMARY_PROMPT
 }
 
 const RECORDING_VIEW_TYPE = 'voice-recording-view';
@@ -103,13 +117,15 @@ class ErrorTrackingService {
 class OpenAIService {
 	private apiKey: string;
 	private errorTracker?: ErrorTrackingService;
+	private customSummaryPrompt: string;
 	
 	// OpenAI Whisper limits: 25MB max file size
 	private readonly MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB in bytes
 	private readonly RECOMMENDED_MAX_SIZE = 20 * 1024 * 1024; // 20MB recommended limit
 
-	constructor(apiKey: string, errorTracker?: ErrorTrackingService) {
+	constructor(apiKey: string, customSummaryPrompt: string, errorTracker?: ErrorTrackingService) {
 		this.apiKey = apiKey;
+		this.customSummaryPrompt = customSummaryPrompt;
 		this.errorTracker = errorTracker;
 	}
 
@@ -302,17 +318,7 @@ class OpenAIService {
 					model: 'gpt-4o',
 					messages: [{
 						role: 'user',
-						content: `You are analyzing a voice recording transcript from a meeting or discussion. Please provide a comprehensive summary using the EXACT SAME LANGUAGE as the transcript (if transcript is in French, respond in French; if in Spanish, respond in Spanish, etc.).
-
-Structure your response with these sections:
-
-1. **Main Topics Discussed**: What were the primary subjects covered?
-2. **Key Points**: The most important information shared
-3. **Decisions Made**: Any conclusions or agreements reached
-4. **Action Items**: Tasks or next steps identified (if any)
-5. **Context & Insights**: Important context or insights that emerged
-
-CRITICAL: Your entire response must be in the same language as the transcript. Do not translate or use English if the transcript is in another language.
+						content: `${this.customSummaryPrompt}
 
 **Transcript:**
 ${processedTranscript}`
@@ -667,7 +673,7 @@ class RecordingModal extends Modal {
 
 	async processRecording(audioBlob: Blob) {
 		try {
-			const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
+			const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.settings.customSummaryPrompt, this.plugin.errorTracker);
 			const transcript = await openaiService.transcribeWithChunking(audioBlob);
 			new TranscriptModal(this.app, this.plugin, transcript).open();
 		} catch (error) {
@@ -747,7 +753,7 @@ class TranscriptModal extends Modal {
 	}
 
 	async generateSummary(): Promise<string> {
-		const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
+		const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.settings.customSummaryPrompt, this.plugin.errorTracker);
 		return await openaiService.generateSummary(this.transcript);
 	}
 
@@ -1032,7 +1038,7 @@ class RecordingView extends ItemView {
 			new Notice('Recording complete. Processing...');
 			
 			try {
-				const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.errorTracker);
+				const openaiService = new OpenAIService(this.plugin.settings.openaiApiKey, this.plugin.settings.customSummaryPrompt, this.plugin.errorTracker);
 				
 				// Step 1: Transcribe audio
 				const transcript = await openaiService.transcribeWithChunking(audioBlob);
@@ -1576,6 +1582,42 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 
 		containerEl.createEl('p', {
 			text: '💡 Need an API key? Visit the OpenAI Platform above to create your account and get your API key.',
+			cls: 'help-text'
+		});
+
+		// Custom AI Summary Prompt Section
+		containerEl.createEl('h3', { text: 'AI Summary Customization' });
+		
+		containerEl.createEl('p', {
+			text: 'Customize the AI prompt used to generate summaries from your voice recordings. This allows you to tailor the output format and focus to your specific needs.',
+			cls: 'setting-description'
+		});
+
+		new Setting(containerEl)
+			.setName('Custom Summary Prompt')
+			.setDesc('Customize the prompt sent to GPT-4o for generating summaries')
+			.addTextArea(text => {
+				text.setPlaceholder('Enter your custom summary prompt...');
+				text.setValue(this.plugin.settings.customSummaryPrompt || DEFAULT_SUMMARY_PROMPT);
+				text.inputEl.rows = 8;
+				text.inputEl.style.width = '100%';
+				text.inputEl.style.minHeight = '150px';
+				text.onChange(async (value) => {
+					this.plugin.settings.customSummaryPrompt = value;
+					await this.plugin.saveSettings();
+				});
+			})
+			.addExtraButton(button => button
+				.setIcon('reset')
+				.setTooltip('Restore Default Prompt')
+				.onClick(async () => {
+					this.plugin.settings.customSummaryPrompt = DEFAULT_SUMMARY_PROMPT;
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings display
+				}));
+
+		containerEl.createEl('p', {
+			text: '💡 The prompt should include instructions for the AI on how to analyze and summarize voice recordings. Use "**Transcript:**" as a placeholder where the actual transcript will be inserted.',
 			cls: 'help-text'
 		});
 
