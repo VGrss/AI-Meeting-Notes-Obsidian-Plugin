@@ -23,6 +23,8 @@ ObisidianRecorder/
 │
 ├── services/                  # Services principaux
 │   ├── ErrorTrackingService.ts # Monitoring d'erreurs (GlitchTip)
+│   ├── TrackingService.ts     # Service de tracking cross-provider
+│   ├── AudioConversionService.ts # Service de conversion audio
 │   └── OpenAIService.ts       # Service OpenAI (legacy)
 │
 ├── src/                       # Code source principal
@@ -32,6 +34,10 @@ ObisidianRecorder/
 │       ├── registry.ts        # Registry des providers
 │       ├── types.ts           # Types et interfaces
 │       ├── errors.ts          # Gestion d'erreurs
+│       ├── local/             # Providers locaux
+│       │   ├── index.ts
+│       │   ├── WhisperCppTranscriber.ts
+│       │   └── FasterWhisperTranscriber.ts
 │       └── openai/            # Providers OpenAI
 │           ├── index.ts
 │           ├── OpenAITranscriber.ts
@@ -89,6 +95,19 @@ Le plugin utilise une architecture modulaire basée sur un système de providers
   - API cloud OpenAI
   - Haute précision, multilingue
   - Limite de 25MB par fichier
+  - Support natif des Blob audio
+
+- **WhisperCpp** (`src/providers/local/WhisperCppTranscriber.ts`)
+  - Transcription locale C++
+  - Conversion automatique Blob → WAV
+  - Optimisé pour la performance locale
+  - Support des formats WAV, MP3, OGG, FLAC
+
+- **FasterWhisper** (`src/providers/local/FasterWhisperTranscriber.ts`)
+  - Transcription locale Python optimisée
+  - Conversion automatique Blob → WAV
+  - Modèles téléchargés automatiquement
+  - Support des formats WAV, MP3, OGG, FLAC
 
 #### Résumé
 - **OpenAI GPT-4o** (`src/providers/openai/OpenAISummarizer.ts`)
@@ -97,8 +116,6 @@ Le plugin utilise une architecture modulaire basée sur un système de providers
   - Structure de résumé standardisée
 
 ### Providers Prévus (Non Implémentés)
-- **WhisperCpp** : Transcription locale C++
-- **FasterWhisper** : Transcription locale Python optimisée
 - **Ollama** : Résumé local avec modèles open-source
 - **GPT4All** : Résumé local léger
 
@@ -145,6 +162,22 @@ Le plugin utilise une architecture modulaire basée sur un système de providers
   - Contexte enrichi des erreurs
   - Configuration utilisateur
   - Logging détaillé
+
+### 3. TrackingService (`services/TrackingService.ts`)
+- **Rôle** : Tracking cross-provider et monitoring des performances
+- **Fonctionnalités** :
+  - Suivi des sessions de pipeline
+  - Métriques de conversion audio
+  - Tracking des providers (local/cloud)
+  - Monitoring des performances
+
+### 4. AudioConversionService (`services/AudioConversionService.ts`)
+- **Rôle** : Conversion automatique des formats audio
+- **Fonctionnalités** :
+  - Conversion Blob → formats supportés (WAV, MP3, OGG, FLAC)
+  - Optimisation pour providers locaux
+  - Gestion des fichiers temporaires
+  - Support multi-formats (WebM/Opus, MP4/AAC)
 
 ## ⚙️ Configuration et Paramètres
 
@@ -247,7 +280,16 @@ class TrackingService {
 - **Pipeline d'enregistrement** : `recording_start`, `recording_stop`, `recording_error`
 - **Pipeline de transcription** : `transcription_start`, `transcription_success`, `transcription_error`
 - **Pipeline de résumé IA** : `summarization_start`, `summarization_success`, `summarization_error`
+- **Conversion audio** : `audio_conversion_start`, `audio_conversion_success`, `audio_conversion_error`
+- **Mécanisme de fallback** : `fallback_triggered`, `fallback_success`, `fallback_failed`
 - **Pipeline complet** : `pipeline_complete`, `pipeline_error_*`
+
+#### Métriques de Conversion Audio
+- **Formats** : Source (WebM/Opus) et cible (WAV/MP3/OGG/FLAC)
+- **Tailles** : Fichier original vs converti
+- **Performance** : Temps de conversion et de transcription
+- **Providers** : Principal et fallback utilisés
+- **Qualité** : Taux de succès/échec par provider
 
 ### Configuration des Providers Locaux
 
@@ -384,23 +426,70 @@ NODE_ENV=development
 
 ### 1. Enregistrement
 ```
-User → RecordingView → VoiceRecorder → Audio File
+User → RecordingView → VoiceRecorder → Audio Blob (audio/webm;codecs=opus)
 ```
 
-### 2. Transcription
+### 2. Transcription avec Conversion Audio
 ```
-Audio File → Provider Registry → TranscriberProvider → TranscriptionResult
+Audio Blob → Provider Detection → {
+  Local Provider → AudioConversionService → WAV File → Local Transcription
+  Cloud Provider → Direct Transcription
+} → TranscriptionResult
 ```
 
-### 3. Résumé
+### 3. Mécanisme de Fallback
+```
+Transcription Failure → Error Detection → {
+  Format Error → Audio Conversion Retry
+  Provider Error → Fallback to OpenAI
+  Complete Failure → User Notification
+}
+```
+
+### 4. Résumé
 ```
 TranscriptionResult → Provider Registry → SummarizerProvider → SummarizationResult
 ```
 
-### 4. Affichage
+### 5. Affichage et Nettoyage
 ```
 Results → UI Components → User Interface
+Temporary Files → Auto Cleanup → Disk Space Management
 ```
+
+## 🎵 Gestion des Formats Audio
+
+### Problème Résolu
+Le plugin rencontrait des erreurs `"Format non supporté: Blob audio"` avec les providers locaux car :
+- **VoiceRecorder** génère des `Blob` au format `audio/webm;codecs=opus`
+- **Providers locaux** attendent des chemins de fichiers (`string`)
+- **Environnement Electron** nécessite une conversion spécifique
+
+### Solution Implémentée
+
+#### 1. AudioConversionService
+- **Conversion automatique** : Blob → WAV/MP3/OGG/FLAC
+- **Optimisation** : 16kHz, mono, qualité 8/10 pour Whisper
+- **Gestion temporaire** : Fichiers nettoyés automatiquement
+- **Multi-formats** : WebM/Opus, MP4/AAC supportés
+
+#### 2. Providers Locaux Améliorés
+- **WhisperCpp** et **FasterWhisper** acceptent maintenant les `Blob`
+- **Détection automatique** du type d'entrée
+- **Conversion transparente** via `AudioConversionService`
+- **Logging détaillé** du processus
+
+#### 3. Mécanisme de Fallback Intelligent
+- **Tentative principale** : Provider sélectionné par l'utilisateur
+- **Fallback automatique** : Basculement vers OpenAI en cas d'échec
+- **Notification utilisateur** : Information du changement de provider
+- **Gestion robuste** : Erreurs en cascade gérées proprement
+
+#### 4. Gestion d'Erreurs Améliorée
+- **Messages informatifs** : Liste des formats supportés
+- **Suggestions de résolution** : Indication de la conversion automatique
+- **Codes d'erreur standardisés** : Métadonnées détaillées
+- **Tracking complet** : Monitoring des conversions et fallbacks
 
 ## 🧪 Tests et Qualité
 
@@ -572,8 +661,56 @@ npx tsc --noEmit
 - **Git** : Gestion des versions
 - **GitHub** : Collaboration et CI/CD
 
+## 🔮 **Améliorations Futures**
+
+### 1. **Conversion Audio Avancée**
+- **FFmpeg Integration** : Conversion de qualité professionnelle
+- **Formats étendus** : Support de plus de formats audio
+- **Conversion asynchrone** : Traitement en arrière-plan
+- **Compression intelligente** : Adaptation selon le provider
+
+### 2. **Optimisations Performance**
+- **Cache des conversions** : Éviter les reconversions identiques
+- **Conversion parallèle** : Traitement simultané de gros fichiers
+- **Préchargement** : Anticipation des conversions fréquentes
+- **Monitoring ressources** : Surveillance CPU/mémoire/disque
+
+### 3. **Monitoring et Analytics**
+- **Dashboard temps réel** : Métriques de conversion en direct
+- **Alertes qualité** : Notifications de dégradation audio
+- **Métriques avancées** : Analyse des patterns d'usage
+- **Rapports de performance** : Statistiques détaillées par provider
+
+### 4. **Expérience Utilisateur**
+- **Conversion progressive** : Barre de progression pour les gros fichiers
+- **Prévisualisation** : Aperçu audio avant conversion
+- **Paramètres avancés** : Configuration fine de la qualité
+- **Historique des conversions** : Suivi des fichiers traités
+
+## 🎯 **Avantages de l'Architecture Audio**
+
+### ✅ **Compatibilité Totale**
+- Support complet des formats audio modernes
+- Compatibilité avec tous les providers (local et cloud)
+- Fonctionnement transparent pour l'utilisateur
+
+### ✅ **Robustesse Maximale**
+- Mécanisme de fallback automatique
+- Gestion d'erreurs granulaire et informative
+- Récupération automatique des échecs
+
+### ✅ **Performance Optimisée**
+- Conversion optimisée pour la transcription
+- Nettoyage automatique des fichiers temporaires
+- Monitoring détaillé des performances
+
+### ✅ **Expérience Utilisateur Fluide**
+- Messages d'erreur clairs et informatifs
+- Notifications de changement de provider
+- Fonctionnement transparent et fiable
+
 ---
 
-**Dernière mise à jour** : 25 septembre 2024  
-**Version** : 1.0  
+**Dernière mise à jour** : 19 décembre 2024  
+**Version** : 1.7.7  
 **Auteur** : Victor Gross

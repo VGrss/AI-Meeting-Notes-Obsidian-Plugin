@@ -294,9 +294,9 @@ export class RecordingView extends ItemView {
 					summarizer: summarizer.name
 				});
 				
-				// Step 1: Transcribe audio
+				// Step 1: Transcribe audio with fallback mechanism
 				console.log('🎯 Début de la transcription...');
-				const transcriptResult = await transcriber.transcribe(audioBlob);
+				const transcriptResult = await this.transcribeWithFallback(transcriber, audioBlob);
 				console.log('✅ Transcription terminée:', {
 					textLength: transcriptResult.text.length,
 					language: transcriptResult.lang
@@ -608,6 +608,79 @@ export class RecordingView extends ItemView {
 			await this.recorder.stop();
 		}
 		this.stopTimer();
+	}
+
+	/**
+	 * Méthode de transcription avec mécanisme de fallback
+	 */
+	private async transcribeWithFallback(transcriber: any, audioBlob: Blob): Promise<any> {
+		try {
+			// Tentative de transcription directe
+			return await transcriber.transcribe(audioBlob);
+		} catch (error) {
+			console.warn('⚠️ Échec de la transcription directe, tentative de fallback...', {
+				function: 'RecordingView.transcribeWithFallback',
+				error: error.message,
+				providerId: transcriber.id
+			});
+
+			// Si c'est une erreur de format non supporté, essayer avec un provider de fallback
+			if (error.code === 'UNSUPPORTED_FORMAT' || error.message.includes('Format non supporté')) {
+				return await this.tryFallbackTranscription(audioBlob);
+			}
+
+			// Pour les autres erreurs, relancer l'exception
+			throw error;
+		}
+	}
+
+	/**
+	 * Tente la transcription avec un provider de fallback (OpenAI)
+	 */
+	private async tryFallbackTranscription(audioBlob: Blob): Promise<any> {
+		try {
+			console.log('🔄 Tentative de transcription avec provider de fallback (OpenAI)...', {
+				function: 'RecordingView.tryFallbackTranscription',
+				originalProvider: this.transcriberProviderId,
+				fallbackProvider: 'openai'
+			});
+
+			// Utiliser OpenAI comme fallback
+			const fallbackTranscriber = getTranscriberProvider('openai');
+			
+			if (!fallbackTranscriber) {
+				throw new Error('Provider de fallback OpenAI non disponible');
+			}
+
+			// Vérifier la santé du provider de fallback
+			const health = await fallbackTranscriber.check();
+			if (!health.ok) {
+				throw new Error(`Provider de fallback non disponible: ${health.details}`);
+			}
+
+			// Effectuer la transcription avec le provider de fallback
+			const result = await fallbackTranscriber.transcribe(audioBlob);
+			
+			console.log('✅ Transcription de fallback réussie:', {
+				function: 'RecordingView.tryFallbackTranscription',
+				textLength: result.text.length,
+				language: result.lang
+			});
+
+			// Afficher une notification à l'utilisateur
+			new Notice('⚠️ Transcription effectuée avec le provider de fallback (OpenAI)');
+
+			return result;
+
+		} catch (fallbackError) {
+			console.error('❌ Échec de la transcription de fallback:', {
+				function: 'RecordingView.tryFallbackTranscription',
+				error: fallbackError.message
+			});
+
+			// Si même le fallback échoue, relancer l'erreur originale
+			throw new Error(`Transcription échouée avec le provider principal et le fallback. Erreur originale: ${fallbackError.message}`);
+		}
 	}
 }
 

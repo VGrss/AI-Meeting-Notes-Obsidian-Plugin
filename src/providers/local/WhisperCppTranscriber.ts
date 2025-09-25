@@ -11,6 +11,7 @@ import {
   TranscriptionSegment,
 } from '../types';
 import { ProviderError, ProviderErrorCode } from '../errors';
+import { AudioConversionService } from '../../../services/AudioConversionService';
 
 export class WhisperCppTranscriber implements TranscriberProvider {
   id = 'whispercpp';
@@ -20,6 +21,7 @@ export class WhisperCppTranscriber implements TranscriberProvider {
   private binaryPath: string;
   private modelPath: string;
   private extraArgs: string[];
+  private audioConversionService: AudioConversionService;
 
   constructor(config: {
     binaryPath: string;
@@ -29,6 +31,7 @@ export class WhisperCppTranscriber implements TranscriberProvider {
     this.binaryPath = config.binaryPath;
     this.modelPath = config.modelPath;
     this.extraArgs = config.extraArgs || [];
+    this.audioConversionService = AudioConversionService.getInstance();
   }
 
   async check(): Promise<ProviderHealth> {
@@ -51,12 +54,38 @@ export class WhisperCppTranscriber implements TranscriberProvider {
 
   async transcribe(audioInput: string | Blob, opts?: TranscriptionOptions): Promise<TranscriptionResult> {
     try {
-      // Pour l'instant, on ne supporte que les fichiers locaux
-      if (typeof audioInput !== 'string') {
-        throw ProviderError.unsupportedFormat(
-          'Blob audio',
-          this.id
+      let audioFilePath: string;
+
+      // Gérer les deux types d'entrée : string (chemin fichier) ou Blob
+      if (typeof audioInput === 'string') {
+        audioFilePath = audioInput;
+      } else {
+        // Convertir le Blob en fichier supporté
+        console.log('🔄 Conversion du Blob audio pour WhisperCpp...', {
+          function: 'WhisperCppTranscriber.transcribe',
+          originalType: audioInput.type,
+          originalSize: audioInput.size
+        });
+
+        const conversionResult = await this.audioConversionService.convertBlobToFile(
+          audioInput,
+          this.id,
+          {
+            outputFormat: 'wav',
+            quality: 8,
+            sampleRate: 16000,
+            channels: 1
+          }
         );
+
+        audioFilePath = conversionResult.filePath;
+        
+        console.log('✅ Conversion audio terminée:', {
+          function: 'WhisperCppTranscriber.transcribe',
+          filePath: audioFilePath,
+          format: conversionResult.format,
+          size: conversionResult.size
+        });
       }
 
       // TODO: Implémenter l'appel à WhisperCpp

@@ -268,6 +268,61 @@ export class TrackingService {
 	getCurrentSession(): PipelineSession | null {
 		return this.currentSession;
 	}
+
+	/**
+	 * Track le début d'une conversion audio
+	 */
+	trackAudioConversionStart(providerId: string, options: Record<string, any>): void {
+		const event = {
+			function: 'TrackingService.trackAudioConversionStart',
+			providerId,
+			originalFormat: options.originalFormat,
+			targetFormat: options.targetFormat,
+			originalSize: options.originalSize,
+			timestamp: Date.now()
+		};
+
+		console.log('Audio conversion started:', event);
+		// Log l'événement de conversion audio
+		this.errorTracking.captureMessage('Audio conversion started', 'info', event);
+	}
+
+	/**
+	 * Track le succès d'une conversion audio
+	 */
+	trackAudioConversionSuccess(providerId: string, result: any): void {
+		const event = {
+			function: 'TrackingService.trackAudioConversionSuccess',
+			providerId,
+			filePath: result.filePath,
+			format: result.format,
+			size: result.size,
+			conversionTime: result.metadata?.conversionTime,
+			timestamp: Date.now()
+		};
+
+		console.log('Audio conversion successful:', event);
+		// Log l'événement de conversion audio réussie
+		this.errorTracking.captureMessage('Audio conversion successful', 'info', event);
+	}
+
+	/**
+	 * Track l'erreur d'une conversion audio
+	 */
+	trackAudioConversionError(error: Error, context: Record<string, any>): void {
+		const event = {
+			function: 'TrackingService.trackAudioConversionError',
+			error: error.message,
+			providerId: context.providerId,
+			originalFormat: context.originalFormat,
+			conversionTime: context.conversionTime,
+			timestamp: Date.now()
+		};
+
+		console.error('Audio conversion error:', event);
+		// Log l'erreur de conversion audio
+		this.errorTracking.captureError(error, event);
+	}
 }
 
 /**
@@ -288,7 +343,8 @@ interface PipelineSession {
 interface PipelineStage {
 	type: 'recording_start' | 'recording_stop' | 'recording_error' | 
 		  'transcription_start' | 'transcription_success' | 'transcription_error' |
-		  'summarization_start' | 'summarization_success' | 'summarization_error';
+		  'summarization_start' | 'summarization_success' | 'summarization_error' |
+		  'audio_conversion_start' | 'audio_conversion_success' | 'audio_conversion_error';
 	timestamp: number;
 	provider: string;
 	error?: string;

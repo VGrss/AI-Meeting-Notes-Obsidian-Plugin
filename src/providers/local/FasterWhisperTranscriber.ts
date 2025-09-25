@@ -11,6 +11,7 @@ import {
   TranscriptionSegment,
 } from '../types';
 import { ProviderError, ProviderErrorCode } from '../errors';
+import { AudioConversionService } from '../../../services/AudioConversionService';
 
 export class FasterWhisperTranscriber implements TranscriberProvider {
   id = 'fasterwhisper';
@@ -19,6 +20,7 @@ export class FasterWhisperTranscriber implements TranscriberProvider {
 
   private pythonPath: string;
   private modelName: string;
+  private audioConversionService: AudioConversionService;
 
   constructor(config: {
     pythonPath: string;
@@ -26,6 +28,7 @@ export class FasterWhisperTranscriber implements TranscriberProvider {
   }) {
     this.pythonPath = config.pythonPath;
     this.modelName = config.modelName;
+    this.audioConversionService = AudioConversionService.getInstance();
   }
 
   async check(): Promise<ProviderHealth> {
@@ -50,12 +53,38 @@ export class FasterWhisperTranscriber implements TranscriberProvider {
 
   async transcribe(audioInput: string | Blob, opts?: TranscriptionOptions): Promise<TranscriptionResult> {
     try {
-      // Pour l'instant, on ne supporte que les fichiers locaux
-      if (typeof audioInput !== 'string') {
-        throw ProviderError.unsupportedFormat(
-          'Blob audio',
-          this.id
+      let audioFilePath: string;
+
+      // Gérer les deux types d'entrée : string (chemin fichier) ou Blob
+      if (typeof audioInput === 'string') {
+        audioFilePath = audioInput;
+      } else {
+        // Convertir le Blob en fichier supporté
+        console.log('🔄 Conversion du Blob audio pour FasterWhisper...', {
+          function: 'FasterWhisperTranscriber.transcribe',
+          originalType: audioInput.type,
+          originalSize: audioInput.size
+        });
+
+        const conversionResult = await this.audioConversionService.convertBlobToFile(
+          audioInput,
+          this.id,
+          {
+            outputFormat: 'wav',
+            quality: 8,
+            sampleRate: 16000,
+            channels: 1
+          }
         );
+
+        audioFilePath = conversionResult.filePath;
+        
+        console.log('✅ Conversion audio terminée:', {
+          function: 'FasterWhisperTranscriber.transcribe',
+          filePath: audioFilePath,
+          format: conversionResult.format,
+          size: conversionResult.size
+        });
       }
 
       // TODO: Implémenter l'appel à FasterWhisper via Python

@@ -182,15 +182,35 @@ export class ProviderError extends Error {
    * Crée une erreur de format non supporté
    */
   static unsupportedFormat(format: string, providerId?: string): ProviderError {
+    const supportedFormats = this.getSupportedFormatsForProvider(providerId);
+    
     return new ProviderError(
       ProviderErrorCode.UNSUPPORTED_FORMAT,
       `Format non supporté: ${format}`,
       {
-        hint: 'Vérifiez la liste des formats supportés par ce provider',
-        metadata: { format },
+        hint: `Formats supportés par ${providerId || 'ce provider'}: ${supportedFormats.join(', ')}. Le service de conversion audio tentera de convertir automatiquement votre fichier.`,
+        metadata: { 
+          format,
+          supportedFormats,
+          conversionAvailable: true
+        },
         providerId,
       }
     );
+  }
+
+  /**
+   * Obtient les formats supportés pour un provider donné
+   */
+  private static getSupportedFormatsForProvider(providerId?: string): string[] {
+    const formatMap: Record<string, string[]> = {
+      'whispercpp': ['WAV', 'MP3', 'OGG', 'FLAC'],
+      'fasterwhisper': ['WAV', 'MP3', 'OGG', 'FLAC'],
+      'openai': ['MP3', 'MP4', 'M4A', 'WAV', 'WEBM', 'OGG'],
+      'default': ['WAV', 'MP3', 'OGG', 'FLAC']
+    };
+
+    return formatMap[providerId || 'default'] || formatMap.default;
   }
 
   /**

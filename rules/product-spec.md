@@ -25,10 +25,11 @@
 4. **Providers de transcription** : OpenAI Whisper, WhisperCpp, FasterWhisper
 5. **Providers de résumé** : OpenAI GPT-4o, Ollama, GPT4All
 6. **Registry des providers** : Gestion centralisée des providers disponibles
-7. **Service de suivi d'erreurs** : Monitoring complet avec GlitchTip
-8. **Gestion des données** : Stockage local des enregistrements et historique
+7. **Service de conversion audio** : Conversion automatique Blob → formats supportés
+8. **Service de suivi d'erreurs** : Monitoring complet avec GlitchTip
+9. **Gestion des données** : Stockage local des enregistrements et historique
 
-## ✨ Fonctionnalités actuelles (v1.7.1)
+## ✨ Fonctionnalités actuelles (v1.7.7)
 
 ### 🎙️ Enregistrement vocal
 - **Démarrage/arrêt** d'enregistrement avec interface intuitive
@@ -60,6 +61,15 @@
 - **Tokens étendus** : 2000 tokens (2.5x plus que précédemment)
 - **Gestion des longs transcripts** : Échantillonnage intelligent (40% début + 20% milieu + 40% fin)
 - **Configuration flexible** : Choix du provider selon les besoins (privacy, performance, coût)
+
+### 🎵 Gestion des formats audio
+- **Conversion automatique** : Blob audio → formats supportés (WAV, MP3, OGG, FLAC)
+- **Support multi-formats** : WebM/Opus, MP4/AAC, et conversion générique
+- **Optimisation intelligente** : 16kHz, mono, qualité 8/10 pour Whisper
+- **Providers locaux** : WhisperCpp et FasterWhisper avec support Blob natif
+- **Mécanisme de fallback** : Basculement automatique vers OpenAI en cas d'échec
+- **Gestion des fichiers temporaires** : Nettoyage automatique et gestion de l'espace disque
+- **Messages d'erreur informatifs** : Liste des formats supportés et suggestions de résolution
 
 ### 🎨 Interface utilisateur
 - **Design moderne** : Style shadcn, interface épurée et efficace
@@ -183,6 +193,7 @@
 - **Interface améliorée** : Configuration des providers dans l'UI
 
 ### Évolutions récentes
+- **v1.7.7** : Correction majeure des formats audio et mécanisme de fallback
 - **v1.7.1** : Architecture multi-providers complète
 - **v1.6.3** : Correction majeure de la troncature des résumés
 - **v1.6.2** : Corrections de sécurité et conformité
@@ -213,4 +224,4 @@
 
 ---
 
-*Cette spécification reflète l'état actuel du produit (v1.7.1) et sera mise à jour avec les nouvelles versions.*
+*Cette spécification reflète l'état actuel du produit (v1.7.7) et sera mise à jour avec les nouvelles versions.*

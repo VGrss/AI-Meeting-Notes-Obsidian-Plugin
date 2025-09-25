@@ -13,6 +13,7 @@ import {
 import { OpenAITranscriber, OpenAISummarizer } from './src/providers/openai';
 import { WhisperCppTranscriber, FasterWhisperTranscriber } from './src/providers/local';
 import { TrackingService } from './services/TrackingService';
+import { AudioConversionService } from './services/AudioConversionService';
 
 interface VoiceNotesSettings {
 	// API Keys - conditionnelles selon le provider choisi
@@ -154,6 +155,11 @@ export default class VoiceNotesPlugin extends Plugin {
 	}
 
 	onunload() {
+		// Nettoyer les fichiers temporaires de conversion audio
+		const audioConversionService = AudioConversionService.getInstance();
+		audioConversionService.cleanupTempFiles().catch(error => {
+			console.warn('Erreur lors du nettoyage des fichiers temporaires:', error);
+		});
 	}
 
 	openRecordingModal() {
