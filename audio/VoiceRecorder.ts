@@ -1,5 +1,3 @@
-import { ErrorTrackingService } from '../services/ErrorTrackingService';
-
 /**
  * Gestionnaire d'enregistrement audio avec compression et optimisations
  */
@@ -7,7 +5,6 @@ export class VoiceRecorder {
 	mediaRecorder: MediaRecorder | null = null;
 	stream: MediaStream | null = null;
 	chunks: Blob[] = [];
-	private errorTracker?: ErrorTrackingService;
 	
 	// Audio compression settings for smaller file sizes
 	private readonly AUDIO_SETTINGS = {
@@ -27,8 +24,7 @@ export class VoiceRecorder {
 		{ mimeType: 'audio/mp4', audioBitsPerSecond: 32000 }, // MP4 default
 	];
 
-	constructor(errorTracker?: ErrorTrackingService) {
-		this.errorTracker = errorTracker;
+	constructor() {
 	}
 
 	private getBestAudioSettings(): MediaRecorderOptions {
@@ -40,7 +36,7 @@ export class VoiceRecorder {
 		// Try fallback options
 		for (const settings of this.FALLBACK_SETTINGS) {
 			if (MediaRecorder.isTypeSupported(settings.mimeType)) {
-				this.errorTracker?.captureMessage('Using fallback audio settings', 'warning', {
+				console.warn('Using fallback audio settings:', {
 					function: 'VoiceRecorder.getBestAudioSettings',
 					selectedSettings: settings
 				});
@@ -49,7 +45,7 @@ export class VoiceRecorder {
 		}
 		
 		// Use browser default if nothing else works
-		this.errorTracker?.captureMessage('Using default audio settings (no compression)', 'warning', {
+		console.warn('Using default audio settings (no compression):', {
 			function: 'VoiceRecorder.getBestAudioSettings',
 			reason: 'no_supported_formats'
 		});
@@ -61,7 +57,7 @@ export class VoiceRecorder {
 		try {
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 				const error = new Error('getUserMedia not supported in this browser');
-				this.errorTracker?.captureError(error, {
+				console.error('getUserMedia not supported:', {
 					function: 'VoiceRecorder.start',
 					reason: 'getUserMedia_not_supported',
 					userAgent: navigator.userAgent
@@ -85,7 +81,7 @@ export class VoiceRecorder {
 			this.mediaRecorder = new MediaRecorder(this.stream, audioSettings);
 			this.chunks = [];
 			
-			this.errorTracker?.captureMessage('Recording started with optimized settings', 'info', {
+			console.log('Recording started with optimized settings:', {
 				function: 'VoiceRecorder.start',
 				audioSettings: audioSettings
 			});
@@ -98,9 +94,10 @@ export class VoiceRecorder {
 
 			this.mediaRecorder.onerror = (event) => {
 				const error = new Error(`MediaRecorder error: ${event.type}`);
-				this.errorTracker?.captureError(error, {
+				console.error('MediaRecorder error:', {
 					function: 'VoiceRecorder.mediaRecorder.onerror',
-					eventType: event.type
+					eventType: event.type,
+					error: error
 				});
 			};
 
@@ -109,7 +106,7 @@ export class VoiceRecorder {
 			this.chunkStartTime = Date.now();
 			
 			// Log successful start
-			this.errorTracker?.captureMessage('Voice recording started successfully', 'info', {
+			console.log('Voice recording started successfully:', {
 				function: 'VoiceRecorder.start',
 				chunkDurationMs: this.CHUNK_DURATION_MS
 			});
@@ -134,7 +131,10 @@ export class VoiceRecorder {
 				errorContext.errorName = error.name;
 			}
 
-			this.errorTracker?.captureError(enhancedError, errorContext);
+			console.error('Voice recording start error:', {
+				error: enhancedError,
+				context: errorContext
+			});
 			throw enhancedError;
 		}
 	}

@@ -1,5 +1,4 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf, ItemView } from 'obsidian';
-import { ErrorTrackingService } from './services/ErrorTrackingService';
 import { VoiceRecorder } from './audio/VoiceRecorder';
 import { RecordingModal } from './ui/RecordingModal';
 import { TranscriptModal } from './ui/TranscriptModal';
@@ -13,14 +12,16 @@ import {
 import { OpenAITranscriber, OpenAISummarizer } from './src/providers/openai';
 
 interface VoiceNotesSettings {
+	// API Keys - conditionnelles selon le provider choisi
 	openaiApiKey: string;
 	glitchTipDsn: string;
-	enableErrorTracking: boolean;
-	customSummaryPrompt: string;
 	
 	// Provider settings
 	transcriberProvider: 'openai-whisper' | 'whispercpp' | 'fasterwhisper';
 	summarizerProvider: 'openai-gpt4o' | 'ollama' | 'gpt4all';
+	
+	// Customization
+	customSummaryPrompt: string;
 	
 	// Local provider configurations
 	localProviders: {
@@ -57,8 +58,7 @@ CRITICAL: Your entire response must be in the same language as the transcript. D
 
 const DEFAULT_SETTINGS: VoiceNotesSettings = {
 	openaiApiKey: '',
-	glitchTipDsn: '',
-	enableErrorTracking: true,
+	glitchTipDsn: 'https://fc4c4cf2c55b4aaaa076954be7e02814@app.glitchtip.com/12695',
 	customSummaryPrompt: DEFAULT_SUMMARY_PROMPT,
 	
 	// Provider settings
@@ -93,14 +93,9 @@ export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
 	statusBarItem: HTMLElement;
 	recordings: RecordingData[] = [];
-	errorTracker: ErrorTrackingService;
 
 	async onload() {
 		await this.loadSettings();
-		
-		// Initialize error tracking
-		this.errorTracker = new ErrorTrackingService();
-		this.errorTracker.init(this.settings.glitchTipDsn, this.settings.enableErrorTracking);
 		
 		// Initialize providers
 		this.initializeProviders();
@@ -131,7 +126,6 @@ export default class VoiceNotesPlugin extends Plugin {
 				leaf, 
 				this.settings.transcriberProvider,
 				this.settings.summarizerProvider,
-				this.errorTracker,
 				this.recordings,
 				(recording) => this.addRecording(recording),
 				() => this.saveSettings()
@@ -153,7 +147,7 @@ export default class VoiceNotesPlugin extends Plugin {
 	}
 
 	openRecordingModal() {
-		new RecordingModal(this.app, this.settings.transcriberProvider, this.settings.summarizerProvider, this.errorTracker).open();
+		new RecordingModal(this.app, this.settings.transcriberProvider, this.settings.summarizerProvider).open();
 	}
 
 	async activateRecordingView() {
@@ -207,15 +201,15 @@ export default class VoiceNotesPlugin extends Plugin {
 	 */
 	private initializeProviders() {
 		// Enregistrer les providers OpenAI
-		const openaiTranscriber = new OpenAITranscriber(this.settings.openaiApiKey, this.errorTracker);
-		const openaiSummarizer = new OpenAISummarizer(this.settings.openaiApiKey, this.settings.customSummaryPrompt, this.errorTracker);
+		const openaiTranscriber = new OpenAITranscriber(this.settings.openaiApiKey);
+		const openaiSummarizer = new OpenAISummarizer(this.settings.openaiApiKey, this.settings.customSummaryPrompt);
 		
 		registerProvider(openaiTranscriber);
 		registerProvider(openaiSummarizer);
 		
 		// TODO: Enregistrer les providers locaux quand ils seront implémentés
-		// registerProvider(new OllamaSummarizer(this.settings.localProviders.ollama, this.errorTracker));
-		// registerProvider(new WhisperCppTranscriber(this.settings.localProviders.whispercpp, this.errorTracker));
+		// registerProvider(new OllamaSummarizer(this.settings.localProviders.ollama));
+		// registerProvider(new WhisperCppTranscriber(this.settings.localProviders.whispercpp));
 	}
 }
 
@@ -244,58 +238,207 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'AI Voice Meeting Notes Settings' });
 
 		containerEl.createEl('p', {
-			text: 'This plugin uses OpenAI Whisper for audio transcription and GPT-4o for intelligent summarization of your voice recordings.',
+			text: 'Configurez votre plugin de prise de notes vocales avec IA. Choisissez vos providers de transcription et de résumé selon vos besoins.',
 			cls: 'setting-description'
 		});
 
-		new Setting(containerEl)
-			.setName('OpenAI API Key')
-			.setDesc('API key for OpenAI services (Whisper transcription + GPT-4o summarization)')
-			.addText(text => {
-				text.setPlaceholder('Enter your OpenAI API key');
-				
-				if (this.plugin.settings.openaiApiKey) {
-					text.setValue('*'.repeat(this.plugin.settings.openaiApiKey.length));
-				} else {
-					text.setValue('');
-				}
-				
-				text.inputEl.type = 'password';
-				
-				text.onChange(async (value) => {
-					if (value !== '*'.repeat(this.plugin.settings.openaiApiKey.length)) {
-						this.plugin.settings.openaiApiKey = value;
-						await this.plugin.saveSettings();
-					}
-				});
-			})
-			.addExtraButton(button => button
-				.setIcon('external-link')
-				.setTooltip('Get OpenAI API Key')
-				.onClick(() => {
-					window.open('https://platform.openai.com/api-keys', '_blank');
-				}));
-
-		containerEl.createEl('p', {
-			text: '💡 Need an API key? Visit the OpenAI Platform above to create your account and get your API key.',
-			cls: 'help-text'
-		});
-
-		// Custom AI Summary Prompt Section
-		containerEl.createEl('h3', { text: 'AI Summary Customization' });
+		// Section Configuration des Providers
+		containerEl.createEl('h3', { text: '🤖 Configuration des Providers' });
 		
 		containerEl.createEl('p', {
-			text: 'Customize the AI prompt used to generate summaries from your voice recordings. This allows you to tailor the output format and focus to your specific needs.',
+			text: 'Sélectionnez les providers pour la transcription audio et le résumé IA. La clé OpenAI n\'est requise que pour les providers cloud OpenAI.',
+			cls: 'setting-description'
+		});
+
+		// Provider de Transcription
+		new Setting(containerEl)
+			.setName('Provider de Transcription')
+			.setDesc('Choisissez le service de transcription audio')
+			.addDropdown(dropdown => {
+				dropdown
+					.addOption('openai-whisper', 'OpenAI Whisper (Cloud)')
+					.addOption('whispercpp', 'Whisper.cpp (Local)')
+					.addOption('fasterwhisper', 'FasterWhisper (Local)')
+					.setValue(this.plugin.settings.transcriberProvider)
+					.onChange(async (value) => {
+						this.plugin.settings.transcriberProvider = value as any;
+						await this.plugin.saveSettings();
+						this.display(); // Refresh to show/hide API key field
+					});
+			});
+
+		// Provider de Résumé
+		new Setting(containerEl)
+			.setName('Provider de Résumé')
+			.setDesc('Choisissez le service de résumé IA')
+			.addDropdown(dropdown => {
+				dropdown
+					.addOption('openai-gpt4o', 'OpenAI GPT-4o (Cloud)')
+					.addOption('ollama', 'Ollama (Local)')
+					.addOption('gpt4all', 'GPT4All (Local)')
+					.setValue(this.plugin.settings.summarizerProvider)
+					.onChange(async (value) => {
+						this.plugin.settings.summarizerProvider = value as any;
+						await this.plugin.saveSettings();
+						this.display(); // Refresh to show/hide API key field
+					});
+			});
+
+		// Clé API OpenAI (conditionnelle)
+		const needsOpenAI = this.plugin.settings.transcriberProvider === 'openai-whisper' || 
+							this.plugin.settings.summarizerProvider === 'openai-gpt4o';
+
+		if (needsOpenAI) {
+			new Setting(containerEl)
+				.setName('Clé API OpenAI')
+				.setDesc('Requis pour les providers OpenAI (Whisper et/ou GPT-4o)')
+				.addText(text => {
+					text.setPlaceholder('Entrez votre clé API OpenAI');
+					
+					if (this.plugin.settings.openaiApiKey) {
+						text.setValue('*'.repeat(this.plugin.settings.openaiApiKey.length));
+					} else {
+						text.setValue('');
+					}
+					
+					text.inputEl.type = 'password';
+					
+					text.onChange(async (value) => {
+						if (value !== '*'.repeat(this.plugin.settings.openaiApiKey.length)) {
+							this.plugin.settings.openaiApiKey = value;
+							await this.plugin.saveSettings();
+						}
+					});
+				})
+				.addExtraButton(button => button
+					.setIcon('external-link')
+					.setTooltip('Obtenir une clé API OpenAI')
+					.onClick(() => {
+						window.open('https://platform.openai.com/api-keys', '_blank');
+					}));
+
+			containerEl.createEl('p', {
+				text: '💡 Besoin d\'une clé API ? Visitez la plateforme OpenAI ci-dessus pour créer votre compte et obtenir votre clé API.',
+				cls: 'help-text'
+			});
+		}
+
+		// Configuration des Providers Locaux
+		if (this.plugin.settings.transcriberProvider === 'whispercpp' || 
+			this.plugin.settings.transcriberProvider === 'fasterwhisper' ||
+			this.plugin.settings.summarizerProvider === 'ollama' ||
+			this.plugin.settings.summarizerProvider === 'gpt4all') {
+			
+			containerEl.createEl('h4', { text: 'Configuration des Providers Locaux' });
+			
+			// Configuration Ollama
+			if (this.plugin.settings.summarizerProvider === 'ollama') {
+				containerEl.createEl('h5', { text: 'Ollama' });
+				
+				new Setting(containerEl)
+					.setName('Host Ollama')
+					.setDesc('Adresse du serveur Ollama')
+					.addText(text => {
+						text.setValue(this.plugin.settings.localProviders.ollama.host);
+						text.onChange(async (value) => {
+							this.plugin.settings.localProviders.ollama.host = value;
+							await this.plugin.saveSettings();
+						});
+					});
+
+				new Setting(containerEl)
+					.setName('Port Ollama')
+					.setDesc('Port du serveur Ollama')
+					.addText(text => {
+						text.setValue(this.plugin.settings.localProviders.ollama.port.toString());
+						text.onChange(async (value) => {
+							this.plugin.settings.localProviders.ollama.port = parseInt(value) || 11434;
+							await this.plugin.saveSettings();
+						});
+					});
+
+				new Setting(containerEl)
+					.setName('Modèle Ollama')
+					.setDesc('Nom du modèle à utiliser')
+					.addText(text => {
+						text.setValue(this.plugin.settings.localProviders.ollama.model);
+						text.onChange(async (value) => {
+							this.plugin.settings.localProviders.ollama.model = value;
+							await this.plugin.saveSettings();
+						});
+					});
+			}
+
+			// Configuration WhisperCpp
+			if (this.plugin.settings.transcriberProvider === 'whispercpp') {
+				containerEl.createEl('h5', { text: 'WhisperCpp' });
+				
+				new Setting(containerEl)
+					.setName('Chemin binaire WhisperCpp')
+					.setDesc('Chemin vers l\'exécutable whisper.cpp')
+					.addText(text => {
+						text.setValue(this.plugin.settings.localProviders.whispercpp.binaryPath);
+						text.onChange(async (value) => {
+							this.plugin.settings.localProviders.whispercpp.binaryPath = value;
+							await this.plugin.saveSettings();
+						});
+					});
+
+				new Setting(containerEl)
+					.setName('Chemin modèle WhisperCpp')
+					.setDesc('Chemin vers le fichier de modèle')
+					.addText(text => {
+						text.setValue(this.plugin.settings.localProviders.whispercpp.modelPath);
+						text.onChange(async (value) => {
+							this.plugin.settings.localProviders.whispercpp.modelPath = value;
+							await this.plugin.saveSettings();
+						});
+					});
+			}
+
+			// Configuration FasterWhisper
+			if (this.plugin.settings.transcriberProvider === 'fasterwhisper') {
+				containerEl.createEl('h5', { text: 'FasterWhisper' });
+				
+				new Setting(containerEl)
+					.setName('Chemin Python')
+					.setDesc('Chemin vers l\'exécutable Python')
+					.addText(text => {
+						text.setValue(this.plugin.settings.localProviders.fasterwhisper.pythonPath);
+						text.onChange(async (value) => {
+							this.plugin.settings.localProviders.fasterwhisper.pythonPath = value;
+							await this.plugin.saveSettings();
+						});
+					});
+
+				new Setting(containerEl)
+					.setName('Nom du modèle')
+					.setDesc('Nom du modèle FasterWhisper à utiliser')
+					.addText(text => {
+						text.setValue(this.plugin.settings.localProviders.fasterwhisper.modelName);
+						text.onChange(async (value) => {
+							this.plugin.settings.localProviders.fasterwhisper.modelName = value;
+							await this.plugin.saveSettings();
+						});
+					});
+			}
+		}
+
+		// Section Personnalisation IA
+		containerEl.createEl('h3', { text: '📝 Personnalisation IA' });
+		
+		containerEl.createEl('p', {
+			text: 'Personnalisez le prompt utilisé pour générer les résumés de vos enregistrements vocaux. Cela vous permet d\'adapter le format de sortie et le focus à vos besoins spécifiques.',
 			cls: 'setting-description'
 		});
 
 		new Setting(containerEl)
-			.setName('Custom Summary Prompt')
-			.setDesc('Customize the prompt sent to GPT-4o for generating summaries')
+			.setName('Prompt de Résumé Personnalisé')
+			.setDesc('Personnalisez le prompt envoyé à l\'IA pour générer les résumés')
 			.addTextArea(text => {
-				text.setPlaceholder('Enter your custom summary prompt...');
+				text.setPlaceholder('Entrez votre prompt de résumé personnalisé...');
 				text.setValue(this.plugin.settings.customSummaryPrompt || DEFAULT_SUMMARY_PROMPT);
-				text.inputEl.rows = 8;
+				text.inputEl.rows = 12; // Augmenté de 8 à 12 lignes
 				text.inputEl.addClass('custom-summary-prompt-textarea');
 				text.onChange(async (value) => {
 					this.plugin.settings.customSummaryPrompt = value;
@@ -304,7 +447,7 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 			})
 			.addExtraButton(button => button
 				.setIcon('reset')
-				.setTooltip('Restore Default Prompt')
+				.setTooltip('Restaurer le Prompt par Défaut')
 				.onClick(async () => {
 					this.plugin.settings.customSummaryPrompt = DEFAULT_SUMMARY_PROMPT;
 					await this.plugin.saveSettings();
@@ -312,52 +455,38 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 				}));
 
 		containerEl.createEl('p', {
-			text: '💡 The prompt should include instructions for the AI on how to analyze and summarize voice recordings. Use "**Transcript:**" as a placeholder where the actual transcript will be inserted.',
+			text: '💡 Le prompt doit inclure des instructions pour l\'IA sur la façon d\'analyser et de résumer les enregistrements vocaux. Utilisez "**Transcript:**" comme placeholder où le transcript réel sera inséré.',
 			cls: 'help-text'
 		});
 
-		// Error Tracking Section
-		containerEl.createEl('h3', { text: 'Error Tracking (Optional)' });
+		// Section Monitoring (simplifiée)
+		containerEl.createEl('h3', { text: '🛡️ Monitoring' });
 		
 		containerEl.createEl('p', {
-			text: 'Configure GlitchTip error tracking to monitor issues and improve reliability. This helps identify problems like transcription failures.',
+			text: 'Configuration du monitoring d\'erreurs avec GlitchTip pour améliorer la fiabilité du plugin.',
 			cls: 'setting-description'
 		});
 
 		new Setting(containerEl)
-			.setName('Enable Error Tracking')
-			.setDesc('Enable GlitchTip error tracking to monitor application issues')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enableErrorTracking)
-				.onChange(async (value) => {
-					this.plugin.settings.enableErrorTracking = value;
-					await this.plugin.saveSettings();
-					// Reinitialize error tracking with new setting
-					this.plugin.errorTracker.init(this.plugin.settings.glitchTipDsn, value);
-				}));
-
-		new Setting(containerEl)
-			.setName('GlitchTip DSN')
-			.setDesc('Data Source Name (DSN) for your GlitchTip project')
+			.setName('Token GlitchTip')
+			.setDesc('Token de monitoring d\'erreurs (configuré par défaut)')
 			.addText(text => {
-				text.setPlaceholder('https://your-key@your-glitchtip-instance.com/project-id');
-				text.setValue(this.plugin.settings.glitchTipDsn || '');
+				text.setValue(this.plugin.settings.glitchTipDsn);
+				text.inputEl.type = 'password';
 				text.onChange(async (value) => {
 					this.plugin.settings.glitchTipDsn = value;
 					await this.plugin.saveSettings();
-					// Reinitialize error tracking with new DSN
-					this.plugin.errorTracker.init(value, this.plugin.settings.enableErrorTracking);
 				});
 			})
 			.addExtraButton(button => button
 				.setIcon('external-link')
-				.setTooltip('Learn about GlitchTip')
+				.setTooltip('En savoir plus sur GlitchTip')
 				.onClick(() => {
 					window.open('https://glitchtip.com/', '_blank');
 				}));
 
 		containerEl.createEl('p', {
-			text: '💡 GlitchTip is an open-source error tracking service. You can use the hosted service or self-host it.',
+			text: '💡 GlitchTip est un service open-source de suivi d\'erreurs. Le token par défaut est configuré pour le monitoring automatique.',
 			cls: 'help-text'
 		});
 	}

@@ -1,6 +1,5 @@
 import { App, Notice, WorkspaceLeaf, ItemView, Modal } from 'obsidian';
 import { VoiceRecorder } from '../audio/VoiceRecorder';
-import { ErrorTrackingService } from '../services/ErrorTrackingService';
 import { getTranscriberProvider, getSummarizerProvider } from '../src/providers';
 
 /**
@@ -28,7 +27,6 @@ export class RecordingView extends ItemView {
 	activeTab: { [key: string]: 'summary' | 'transcript' } = {};
 	
 	// Services
-	private errorTracker: ErrorTrackingService;
 	private transcriberProviderId: string;
 	private summarizerProviderId: string;
 	
@@ -41,7 +39,6 @@ export class RecordingView extends ItemView {
 		leaf: WorkspaceLeaf, 
 		transcriberProviderId: string,
 		summarizerProviderId: string,
-		errorTracker: ErrorTrackingService,
 		recordings: RecordingData[],
 		onAddRecording: (recording: RecordingData) => void,
 		onSaveSettings: () => Promise<void>
@@ -49,7 +46,6 @@ export class RecordingView extends ItemView {
 		super(leaf);
 		this.transcriberProviderId = transcriberProviderId;
 		this.summarizerProviderId = summarizerProviderId;
-		this.errorTracker = errorTracker;
 		this.recordings = recordings;
 		this.onAddRecording = onAddRecording;
 		this.onSaveSettings = onSaveSettings;
@@ -169,7 +165,7 @@ export class RecordingView extends ItemView {
 		if (!this.isRecording) {
 			// Start recording
 			try {
-				this.recorder = new VoiceRecorder(this.errorTracker);
+				this.recorder = new VoiceRecorder();
 				await this.recorder.start();
 				this.isRecording = true;
 				this.isPaused = false;

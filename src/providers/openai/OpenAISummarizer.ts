@@ -18,12 +18,10 @@ export class OpenAISummarizer implements SummarizerProvider {
 
   private apiKey: string;
   private customSummaryPrompt: string;
-  private errorTracker?: any; // ErrorTrackingService
 
-  constructor(apiKey: string, customSummaryPrompt: string, errorTracker?: any) {
+  constructor(apiKey: string, customSummaryPrompt: string) {
     this.apiKey = apiKey;
     this.customSummaryPrompt = customSummaryPrompt;
-    this.errorTracker = errorTracker;
   }
 
   async check(): Promise<ProviderHealth> {
@@ -92,7 +90,7 @@ export class OpenAISummarizer implements SummarizerProvider {
         
         processedText = `${firstPart}\n\n[...MIDDLE SECTION SUMMARY...]\n${middlePart}\n\n[...CONTINUED...]\n${lastPart}`;
         
-        this.errorTracker?.captureMessage('Long transcript truncated for summary', 'warning', {
+        console.warn('Long transcript truncated for summary:', {
           function: 'OpenAISummarizer.summarize',
           originalLength: text.length,
           processedLength: processedText.length,
@@ -142,7 +140,7 @@ ${processedText}`
       const summary = result.choices[0].message.content;
       
       // Log successful summary generation
-      this.errorTracker?.captureMessage('AI summary generated successfully', 'info', {
+      console.log('AI summary generated successfully:', {
         function: 'OpenAISummarizer.summarize',
         originalTextLength: text.length,
         processedTextLength: processedText.length,
@@ -165,10 +163,11 @@ ${processedText}`
         throw error;
       }
       
-      this.errorTracker?.captureError(error, {
+      console.error('Unexpected error in summarization:', {
         function: 'OpenAISummarizer.summarize',
         textLength: text.length,
-        errorType: 'unexpected'
+        errorType: 'unexpected',
+        error: error
       });
       
       throw ProviderError.processingFailed(

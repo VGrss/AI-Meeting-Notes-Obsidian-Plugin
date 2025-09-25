@@ -1,7 +1,7 @@
 {
 	"id": "ai-voice-meeting-notes",
 	"name": "AI Voice Meeting Notes",
-	"version": "1.7.1",
+	"version": "1.7.2",
 	"minAppVersion": "0.15.0",
 	"description": "Record, transcribe, and summarize voice meetings with AI integration",
 	"author": "Victor Gross",

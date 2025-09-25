@@ -18,15 +18,13 @@ export class OpenAITranscriber implements TranscriberProvider {
   type = 'cloud' as const;
 
   private apiKey: string;
-  private errorTracker?: any; // ErrorTrackingService
 
   // OpenAI Whisper limits: 25MB max file size
   private readonly MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB in bytes
   private readonly RECOMMENDED_MAX_SIZE = 20 * 1024 * 1024; // 20MB recommended limit
 
-  constructor(apiKey: string, errorTracker?: any) {
+  constructor(apiKey: string) {
     this.apiKey = apiKey;
-    this.errorTracker = errorTracker;
   }
 
   async check(): Promise<ProviderHealth> {
@@ -95,7 +93,7 @@ export class OpenAITranscriber implements TranscriberProvider {
       
       // Log warning for large files
       if (sizeCheck.message) {
-        this.errorTracker?.captureMessage('Large file upload attempt', 'warning', {
+        console.warn('Large file upload attempt:', {
           function: 'OpenAITranscriber.transcribe',
           fileSizeMB: sizeMB,
           message: sizeCheck.message,
@@ -154,7 +152,7 @@ export class OpenAITranscriber implements TranscriberProvider {
       const result = await response.json();
       
       // Log successful transcription
-      this.errorTracker?.captureMessage('Audio transcription completed successfully', 'info', {
+      console.log('Audio transcription completed successfully:', {
         function: 'OpenAITranscriber.transcribe',
         audioBlobSize: audioBlob.size,
         transcriptLength: result.text?.length || 0
@@ -180,10 +178,11 @@ export class OpenAITranscriber implements TranscriberProvider {
         throw error;
       }
       
-      this.errorTracker?.captureError(error, {
+      console.error('Unexpected error in transcription:', {
         function: 'OpenAITranscriber.transcribe',
         audioPath,
-        errorType: 'unexpected'
+        errorType: 'unexpected',
+        error: error
       });
       
       throw ProviderError.processingFailed(

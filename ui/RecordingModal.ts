@@ -1,6 +1,5 @@
 import { App, Modal, Notice } from 'obsidian';
 import { VoiceRecorder } from '../audio/VoiceRecorder';
-import { ErrorTrackingService } from '../services/ErrorTrackingService';
 import { TranscriptModal } from './TranscriptModal';
 import { getTranscriberProvider, getSummarizerProvider } from '../src/providers';
 
@@ -15,20 +14,17 @@ export class RecordingModal extends Modal {
 	timeInterval: NodeJS.Timeout | null = null;
 	
 	// Services
-	private errorTracker: ErrorTrackingService;
 	private transcriberProviderId: string;
 	private summarizerProviderId: string;
 
 	constructor(
 		app: App, 
 		transcriberProviderId: string,
-		summarizerProviderId: string,
-		errorTracker: ErrorTrackingService
+		summarizerProviderId: string
 	) {
 		super(app);
 		this.transcriberProviderId = transcriberProviderId;
 		this.summarizerProviderId = summarizerProviderId;
-		this.errorTracker = errorTracker;
 	}
 
 	onOpen() {
@@ -68,7 +64,7 @@ export class RecordingModal extends Modal {
 	async startRecording(startBtn: HTMLButtonElement, pauseBtn: HTMLButtonElement, stopBtn: HTMLButtonElement, timeEl: HTMLElement) {
 		if (!this.isRecording) {
 			try {
-				this.recorder = new VoiceRecorder(this.errorTracker);
+				this.recorder = new VoiceRecorder();
 				await this.recorder.start();
 				this.isRecording = true;
 				this.isPaused = false;

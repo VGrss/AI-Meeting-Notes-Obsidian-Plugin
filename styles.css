@@ -564,7 +564,12 @@
 /* Custom Summary Prompt Text Area */
 .custom-summary-prompt-textarea {
 	width: 100% !important;
-	min-height: 150px !important;
+	min-height: 200px !important;
+	max-height: 400px !important;
+	font-family: var(--font-monospace) !important;
+	font-size: 13px !important;
+	line-height: 1.4 !important;
+	resize: vertical !important;
 }
 
 /* Confirmation Modal Styles */
