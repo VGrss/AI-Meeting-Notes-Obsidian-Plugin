@@ -172,11 +172,171 @@ interface VoiceNotesSettings {
 }
 ```
 
+### Configuration GlitchTip (Monitoring d'Erreurs)
+
+#### Setup Initial
+1. **Créer un compte** sur [GlitchTip](https://glitchtip.com/)
+2. **Créer un projet** pour le plugin
+3. **Récupérer le DSN** depuis les paramètres du projet
+4. **Configurer dans Obsidian** : Settings → AI Voice Meeting Notes → GlitchTip DSN
+
+#### Configuration Avancée
+```typescript
+// ErrorTrackingService.ts
+class ErrorTrackingService {
+  init(dsn: string, enabled: boolean): void {
+    if (enabled && dsn) {
+      // Configuration Sentry/GlitchTip
+      Sentry.init({
+        dsn: dsn,
+        environment: 'production',
+        beforeSend: (event) => {
+          // Filtrage des erreurs sensibles
+          return this.filterSensitiveData(event);
+        }
+      });
+    }
+  }
+}
+```
+
+#### Types d'Erreurs Trackées
+- **Erreurs de transcription** : Échecs API Whisper
+- **Erreurs de résumé** : Échecs API GPT-4o
+- **Erreurs de providers** : Problèmes de configuration
+- **Erreurs d'enregistrement** : Problèmes audio
+- **Erreurs d'interface** : Problèmes UI/UX
+
+### Configuration des Providers Locaux
+
+#### Ollama (Résumé Local)
+```typescript
+// Configuration dans les paramètres
+localProviders: {
+  ollama: {
+    host: 'localhost',        // Adresse du serveur Ollama
+    port: 11434,             // Port par défaut
+    model: 'mistral:7b'      // Modèle à utiliser
+  }
+}
+```
+
+**Prérequis :**
+- Installation d'Ollama : `curl -fsSL https://ollama.ai/install.sh | sh`
+- Modèle installé : `ollama pull mistral:7b`
+- Serveur démarré : `ollama serve`
+
+#### WhisperCpp (Transcription Locale)
+```typescript
+// Configuration dans les paramètres
+localProviders: {
+  whispercpp: {
+    binaryPath: '/usr/local/bin/whisper-cpp',
+    modelPath: '/path/to/ggml-base.en.bin',
+    extraArgs: ['--threads', '4', '--language', 'en']
+  }
+}
+```
+
+**Prérequis :**
+- Compilation de WhisperCpp
+- Téléchargement du modèle GGML
+- Configuration des chemins
+
+#### FasterWhisper (Transcription Python)
+```typescript
+// Configuration dans les paramètres
+localProviders: {
+  fasterwhisper: {
+    pythonPath: 'python3',
+    modelName: 'small'  // tiny, base, small, medium, large
+  }
+}
+```
+
+**Prérequis :**
+- Python 3.8+
+- Installation : `pip install faster-whisper`
+- Modèles téléchargés automatiquement
+
+### Configuration des Providers Cloud
+
+#### OpenAI (Whisper + GPT-4o)
+```typescript
+// Configuration requise
+settings: {
+  openaiApiKey: 'sk-...',  // Clé API OpenAI
+  transcriberProvider: 'openai-whisper',
+  summarizerProvider: 'openai-gpt4o'
+}
+```
+
+**Limites et Coûts :**
+- **Whisper** : 25MB max par fichier, $0.006/minute
+- **GPT-4o** : 2000 tokens max, $0.03/1K tokens
+- **Rate Limits** : 500 requêtes/minute
+
 ### Fichiers de Configuration
-- **manifest.json** : Configuration du plugin Obsidian
-- **package.json** : Dépendances et scripts
-- **tsconfig.json** : Configuration TypeScript
-- **esbuild.config.mjs** : Configuration de build
+
+#### manifest.json
+```json
+{
+  "id": "ai-voice-meeting-notes",
+  "name": "AI Voice Meeting Notes",
+  "version": "1.7.1",
+  "minAppVersion": "0.15.0",
+  "description": "Record, transcribe, and summarize voice meetings with AI integration",
+  "author": "Victor Gross",
+  "isDesktopOnly": true
+}
+```
+
+#### package.json
+```json
+{
+  "name": "ai-voice-meeting-notes",
+  "version": "1.7.1",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@sentry/browser": "^10.10.0",
+    "@sentry/tracing": "^7.120.4"
+  }
+}
+```
+
+#### tsconfig.json
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+### Variables d'Environnement
+
+#### Développement
+```bash
+# .env.local (optionnel)
+OPENAI_API_KEY=sk-...
+GLITCHTIP_DSN=https://...
+NODE_ENV=development
+```
+
+#### Production
+- Configuration via l'interface Obsidian
+- Stockage sécurisé dans les paramètres du plugin
+- Pas de variables d'environnement requises
 
 ## 🔄 Flux de Données
 
@@ -230,6 +390,44 @@ Results → UI Components → User Interface
 3. **Optimisation** : Minification et compression
 4. **Output** : `main.js` et `manifest.json`
 
+## 🔒 Sécurité et Bonnes Pratiques
+
+### Gestion des Clés API
+- **Stockage sécurisé** : Clés stockées localement dans les paramètres Obsidian
+- **Masquage dans l'UI** : Affichage avec des astérisques dans les paramètres
+- **Validation** : Vérification du format des clés avant utilisation
+- **Rotation** : Support du changement de clés sans redémarrage
+
+### Données Sensibles
+- **Filtrage GlitchTip** : Suppression des données sensibles avant envoi
+- **Logs locaux** : Pas de données sensibles dans les logs
+- **Transcription** : Données audio traitées localement quand possible
+- **Résumés** : Contenu des réunions potentiellement sensible
+
+### Validation des Entrées
+```typescript
+// Exemple de validation des paramètres
+function validateSettings(settings: VoiceNotesSettings): boolean {
+  // Validation de la clé OpenAI
+  if (settings.openaiApiKey && !settings.openaiApiKey.startsWith('sk-')) {
+    throw new Error('Invalid OpenAI API key format');
+  }
+  
+  // Validation des ports
+  if (settings.localProviders.ollama.port < 1 || settings.localProviders.ollama.port > 65535) {
+    throw new Error('Invalid Ollama port');
+  }
+  
+  return true;
+}
+```
+
+### Gestion des Erreurs Sécurisée
+- **Pas d'exposition** : Erreurs internes non exposées à l'utilisateur
+- **Messages génériques** : Messages d'erreur informatifs mais sécurisés
+- **Logging contrôlé** : Seules les erreurs non sensibles sont loggées
+- **Fallback** : Comportement de secours en cas d'erreur
+
 ## 🔍 Points d'Attention pour les LLMs
 
 ### 1. Navigation dans le Code
@@ -254,12 +452,83 @@ Results → UI Components → User Interface
 - **Providers** : Configuration dans `localProviders`
 - **Validation** : Vérification des paramètres requis
 
+### 5. Sécurité
+- **Clés API** : Stockage et validation sécurisés
+- **Données sensibles** : Filtrage et protection
+- **Validation** : Vérification des entrées utilisateur
+- **Erreurs** : Gestion sécurisée des erreurs
+
+## 🐛 Debugging et Développement
+
+### Outils de Debug
+- **Console Obsidian** : `Ctrl+Shift+I` pour ouvrir les DevTools
+- **Logs du plugin** : Messages dans la console du navigateur
+- **GlitchTip** : Monitoring des erreurs en production
+- **Tests unitaires** : `npm test` pour les tests Jest
+
+### Points de Debug Courants
+```typescript
+// 1. Vérification des providers
+console.log('Providers disponibles:', getAllProviders('transcriber'));
+
+// 2. Validation des paramètres
+console.log('Settings:', this.settings);
+
+// 3. État de l'enregistrement
+console.log('Recording state:', this.recorder.isRecording);
+
+// 4. Erreurs de transcription
+this.errorTracker.captureException(error, {
+  tags: { component: 'transcription' },
+  extra: { provider: this.settings.transcriberProvider }
+});
+```
+
+### Développement Local
+```bash
+# 1. Mode développement
+npm run dev
+
+# 2. Build de production
+npm run build
+
+# 3. Tests
+npm test
+
+# 4. Vérification des types
+npx tsc --noEmit
+```
+
+### Hot Reload
+- **esbuild** : Recompilation automatique en mode dev
+- **Obsidian** : Rechargement du plugin nécessaire
+- **Cache** : Vider le cache si nécessaire
+
+### Profiling et Performance
+- **Chrome DevTools** : Profiling des performances
+- **Memory leaks** : Surveillance de la mémoire
+- **Network** : Monitoring des appels API
+- **Timing** : Mesure des temps de traitement
+
 ## 📚 Ressources Utiles
 
+### Documentation Technique
 - **Documentation Obsidian** : [Plugin Development](https://docs.obsidian.md/Plugins/Getting+Started)
 - **TypeScript** : [Handbook](https://www.typescriptlang.org/docs/)
 - **Jest** : [Testing Framework](https://jestjs.io/docs/getting-started)
 - **esbuild** : [Bundler](https://esbuild.github.io/)
+
+### APIs et Services
+- **OpenAI API** : [Documentation](https://platform.openai.com/docs)
+- **GlitchTip** : [Documentation](https://glitchtip.com/docs)
+- **Ollama** : [Documentation](https://ollama.ai/docs)
+- **WhisperCpp** : [GitHub](https://github.com/ggerganov/whisper.cpp)
+
+### Outils de Développement
+- **VS Code** : Extensions TypeScript et Obsidian
+- **Chrome DevTools** : Debugging et profiling
+- **Git** : Gestion des versions
+- **GitHub** : Collaboration et CI/CD
 
 ---
 
