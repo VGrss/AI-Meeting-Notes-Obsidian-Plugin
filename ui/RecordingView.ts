@@ -286,8 +286,21 @@ export class RecordingView extends ItemView {
 					sessionId
 				});
 
-				const transcriber = getTranscriberProvider(this.transcriberProviderId);
-				const summarizer = getSummarizerProvider(this.summarizerProviderId);
+				// Vérifier que les providers sont disponibles
+				let transcriber, summarizer;
+				try {
+					transcriber = getTranscriberProvider(this.transcriberProviderId);
+				} catch (error) {
+					console.warn('Transcriber provider not found, falling back to OpenAI:', error);
+					transcriber = getTranscriberProvider('openai-whisper');
+				}
+
+				try {
+					summarizer = getSummarizerProvider(this.summarizerProviderId);
+				} catch (error) {
+					console.warn('Summarizer provider not found, falling back to OpenAI:', error);
+					summarizer = getSummarizerProvider('openai-gpt4o');
+				}
 				
 				console.log('✅ Providers récupérés:', {
 					transcriber: transcriber.name,
@@ -646,7 +659,7 @@ export class RecordingView extends ItemView {
 			});
 
 			// Utiliser OpenAI comme fallback
-			const fallbackTranscriber = getTranscriberProvider('openai');
+			const fallbackTranscriber = getTranscriberProvider('openai-whisper');
 			
 			if (!fallbackTranscriber) {
 				throw new Error('Provider de fallback OpenAI non disponible');

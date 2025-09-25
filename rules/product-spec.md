@@ -29,7 +29,7 @@
 8. **Service de suivi d'erreurs** : Monitoring complet avec GlitchTip
 9. **Gestion des données** : Stockage local des enregistrements et historique
 
-## ✨ Fonctionnalités actuelles (v1.7.7)
+## ✨ Fonctionnalités actuelles (v1.7.8)
 
 ### 🎙️ Enregistrement vocal
 - **Démarrage/arrêt** d'enregistrement avec interface intuitive
@@ -184,7 +184,7 @@
 
 ## 🚀 Feuille de route et évolutions
 
-### Version actuelle : v1.7.1
+### Version actuelle : v1.7.8
 - **Architecture multi-providers** : Refactorisation complète en système modulaire
 - **Providers multiples** : Support OpenAI + providers locaux (Ollama, WhisperCpp, FasterWhisper)
 - **Configuration flexible** : Choix des providers selon les besoins (privacy, performance, coût)
@@ -193,6 +193,7 @@
 - **Interface améliorée** : Configuration des providers dans l'UI
 
 ### Évolutions récentes
+- **v1.7.8** : Correction critique du format de build (CommonJS) et amélioration de la stabilité
 - **v1.7.7** : Correction majeure des formats audio et mécanisme de fallback
 - **v1.7.1** : Architecture multi-providers complète
 - **v1.6.3** : Correction majeure de la troncature des résumés
@@ -224,4 +225,4 @@
 
 ---
 
-*Cette spécification reflète l'état actuel du produit (v1.7.7) et sera mise à jour avec les nouvelles versions.*
+*Cette spécification reflète l'état actuel du produit (v1.7.8) et sera mise à jour avec les nouvelles versions.*

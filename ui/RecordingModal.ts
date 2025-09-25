@@ -145,8 +145,21 @@ export class RecordingModal extends Modal {
 
 	async processRecording(audioBlob: Blob) {
 		try {
-			const transcriber = getTranscriberProvider(this.transcriberProviderId);
-			const summarizer = getSummarizerProvider(this.summarizerProviderId);
+			// Vérifier que les providers sont disponibles avec fallback
+			let transcriber, summarizer;
+			try {
+				transcriber = getTranscriberProvider(this.transcriberProviderId);
+			} catch (error) {
+				console.warn('Transcriber provider not found, falling back to OpenAI:', error);
+				transcriber = getTranscriberProvider('openai-whisper');
+			}
+
+			try {
+				summarizer = getSummarizerProvider(this.summarizerProviderId);
+			} catch (error) {
+				console.warn('Summarizer provider not found, falling back to OpenAI:', error);
+				summarizer = getSummarizerProvider('openai-gpt4o');
+			}
 			
 			// Transcribe the audio blob
 			const transcript = await transcriber.transcribe(audioBlob);

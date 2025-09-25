@@ -232,16 +232,12 @@ if [ ! -d "$OBSIDIAN_PLUGIN_PATH" ]; then
     exit 1
 fi
 
-# 2. Sauvegarder l'ancienne version (optionnel mais recommandé)
-echo "📦 Sauvegarde de l'ancienne version..."
-cp "$OBSIDIAN_PLUGIN_PATH/main.js" "main.js.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || echo "⚠️ Aucune ancienne version à sauvegarder"
-
-# 3. Copier les nouveaux fichiers
+# 2. Copier les nouveaux fichiers
 echo "🔄 Mise à jour des fichiers..."
 cp main.js "$OBSIDIAN_PLUGIN_PATH/"
 cp manifest.json "$OBSIDIAN_PLUGIN_PATH/"
 
-# 4. Vérifier la copie
+# 3. Vérifier la copie
 if [ -f "$OBSIDIAN_PLUGIN_PATH/main.js" ] && [ -f "$OBSIDIAN_PLUGIN_PATH/manifest.json" ]; then
     echo "✅ Mise à jour locale réussie!"
     echo "📊 Taille du nouveau main.js: $(ls -lh main.js | awk '{print $5}')"
@@ -251,7 +247,7 @@ else
     exit 1
 fi
 
-# 5. Instructions pour l'utilisateur
+# 4. Instructions pour l'utilisateur
 echo ""
 echo "🎯 Prochaines étapes:"
 echo "1. Redémarrez Obsidian pour que les changements prennent effet"
@@ -313,10 +309,9 @@ Le script `update-local.sh` permet de mettre à jour rapidement votre installati
 
 # Le script fait automatiquement :
 # 1. Vérification des fichiers source
-# 2. Sauvegarde de l'ancienne version
-# 3. Copie des nouveaux fichiers
-# 4. Vérification de la synchronisation des versions
-# 5. Instructions pour redémarrer Obsidian
+# 2. Copie des nouveaux fichiers
+# 3. Vérification de la synchronisation des versions
+# 4. Instructions pour redémarrer Obsidian
 ```
 
 ### Workflow Recommandé

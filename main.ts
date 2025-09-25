@@ -108,7 +108,7 @@ export default class VoiceNotesPlugin extends Plugin {
 		this.trackingService = TrackingService.getInstance();
 		this.trackingService.init(this.settings.glitchTipDsn, this.settings.glitchTipEnabled);
 		
-		// Initialize providers
+		// Initialize providers AFTER settings are loaded
 		this.initializeProviders();
 
 		this.addRibbonIcon('mic', 'Open Voice Recording Panel', (evt: MouseEvent) => {
@@ -218,36 +218,51 @@ export default class VoiceNotesPlugin extends Plugin {
 	 * Initialise tous les providers disponibles
 	 */
 	private initializeProviders() {
-		// Vider le registry avant de réinitialiser
-		this.clearProviders();
-		
-		// Enregistrer les providers OpenAI
-		const openaiTranscriber = new OpenAITranscriber(this.settings.openaiApiKey);
-		const openaiSummarizer = new OpenAISummarizer(this.settings.openaiApiKey, this.settings.customSummaryPrompt);
-		
-		registerProvider(openaiTranscriber);
-		registerProvider(openaiSummarizer);
-		
-		// Enregistrer les providers locaux
-		if (this.settings.localProviders.whispercpp.binaryPath && this.settings.localProviders.whispercpp.modelPath) {
-			const whisperCppTranscriber = new WhisperCppTranscriber({
-				binaryPath: this.settings.localProviders.whispercpp.binaryPath,
-				modelPath: this.settings.localProviders.whispercpp.modelPath,
-				extraArgs: this.settings.localProviders.whispercpp.extraArgs
-			});
-			registerProvider(whisperCppTranscriber);
+		try {
+			// Vider le registry avant de réinitialiser
+			this.clearProviders();
+			
+			// Enregistrer les providers OpenAI (toujours disponibles)
+			const openaiTranscriber = new OpenAITranscriber(this.settings.openaiApiKey);
+			const openaiSummarizer = new OpenAISummarizer(this.settings.openaiApiKey, this.settings.customSummaryPrompt);
+			
+			registerProvider(openaiTranscriber);
+			registerProvider(openaiSummarizer);
+			
+			// Enregistrer les providers locaux seulement s'ils sont configurés
+			if (this.settings.localProviders.whispercpp.binaryPath && this.settings.localProviders.whispercpp.modelPath) {
+				try {
+					const whisperCppTranscriber = new WhisperCppTranscriber({
+						binaryPath: this.settings.localProviders.whispercpp.binaryPath,
+						modelPath: this.settings.localProviders.whispercpp.modelPath,
+						extraArgs: this.settings.localProviders.whispercpp.extraArgs
+					});
+					registerProvider(whisperCppTranscriber);
+				} catch (error) {
+					console.warn('Failed to register WhisperCpp provider:', error);
+				}
+			}
+			
+			if (this.settings.localProviders.fasterwhisper.pythonPath && this.settings.localProviders.fasterwhisper.modelName) {
+				try {
+					const fasterWhisperTranscriber = new FasterWhisperTranscriber({
+						pythonPath: this.settings.localProviders.fasterwhisper.pythonPath,
+						modelName: this.settings.localProviders.fasterwhisper.modelName
+					});
+					registerProvider(fasterWhisperTranscriber);
+				} catch (error) {
+					console.warn('Failed to register FasterWhisper provider:', error);
+				}
+			}
+			
+			// TODO: Enregistrer les providers de résumé locaux
+			// registerProvider(new OllamaSummarizer(this.settings.localProviders.ollama));
+			
+			console.log('Providers initialized successfully');
+		} catch (error) {
+			console.error('Failed to initialize providers:', error);
+			// Le plugin peut toujours fonctionner avec les providers par défaut
 		}
-		
-		if (this.settings.localProviders.fasterwhisper.pythonPath && this.settings.localProviders.fasterwhisper.modelName) {
-			const fasterWhisperTranscriber = new FasterWhisperTranscriber({
-				pythonPath: this.settings.localProviders.fasterwhisper.pythonPath,
-				modelName: this.settings.localProviders.fasterwhisper.modelName
-			});
-			registerProvider(fasterWhisperTranscriber);
-		}
-		
-		// TODO: Enregistrer les providers de résumé locaux
-		// registerProvider(new OllamaSummarizer(this.settings.localProviders.ollama));
 	}
 
 	/**
