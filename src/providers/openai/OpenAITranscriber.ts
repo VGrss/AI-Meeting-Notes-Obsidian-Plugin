@@ -72,15 +72,24 @@ export class OpenAITranscriber implements TranscriberProvider {
     }
   }
 
-  async transcribe(audioPath: string, opts?: TranscriptionOptions): Promise<TranscriptionResult> {
+  async transcribe(audioInput: string | Blob, opts?: TranscriptionOptions): Promise<TranscriptionResult> {
     try {
       if (!this.apiKey) {
         throw ProviderError.authInvalid(this.id, 'Clé API OpenAI requise');
       }
 
-      // Pour l'instant, on assume que audioPath est un Blob ou File
-      // Dans un vrai cas d'usage, il faudrait gérer les fichiers locaux
-      const audioBlob = audioPath as any; // TODO: Adapter selon le type réel
+      // Gérer les deux types d'entrée : string (chemin fichier) ou Blob
+      let audioBlob: Blob;
+      
+      if (typeof audioInput === 'string') {
+        // TODO: Implémenter la lecture de fichier local
+        throw ProviderError.fileNotFound(
+          'Lecture de fichiers locaux non encore implémentée',
+          this.id
+        );
+      } else {
+        audioBlob = audioInput;
+      }
 
       // Pre-flight size check
       const sizeCheck = this.checkFileSize(audioBlob);
@@ -89,6 +98,14 @@ export class OpenAITranscriber implements TranscriberProvider {
       if (!sizeCheck.canUpload) {
         throw ProviderError.fileNotFound(
           `Fichier audio trop volumineux (${sizeMB}MB)`,
+          this.id
+        );
+      }
+
+      // Validation du format audio
+      if (!this.isValidAudioFormat(audioBlob)) {
+        throw ProviderError.unsupportedFormat(
+          audioBlob.type || 'unknown',
           this.id
         );
       }
@@ -118,7 +135,7 @@ export class OpenAITranscriber implements TranscriberProvider {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
         },
-        body: formData
+        body: formData as any
       });
 
       if (!response.status || response.status < 200 || response.status >= 300) {
@@ -157,7 +174,8 @@ export class OpenAITranscriber implements TranscriberProvider {
       console.log('Audio transcription completed successfully:', {
         function: 'OpenAITranscriber.transcribe',
         audioBlobSize: audioBlob.size,
-        transcriptLength: result.text?.length || 0
+        transcriptLength: result.text?.length || 0,
+        mimeType: audioBlob.type
       });
       
       return {
@@ -182,7 +200,7 @@ export class OpenAITranscriber implements TranscriberProvider {
       
       console.error('Unexpected error in transcription:', {
         function: 'OpenAITranscriber.transcribe',
-        audioPath,
+        audioInput,
         errorType: 'unexpected',
         error: error
       });
@@ -215,6 +233,39 @@ export class OpenAITranscriber implements TranscriberProvider {
     }
     
     return { canUpload: true };
+  }
+
+  private isValidAudioFormat(audioBlob: Blob): boolean {
+    // Formats supportés par OpenAI Whisper
+    const supportedTypes = [
+      'audio/mpeg',           // MP3
+      'audio/mp4',            // MP4/AAC
+      'audio/mp3',            // MP3
+      'audio/wav',            // WAV
+      'audio/x-wav',          // WAV
+      'audio/webm',           // WebM
+      'audio/ogg',            // OGG
+      'audio/flac',           // FLAC
+      'audio/m4a',            // M4A
+      'audio/x-m4a',          // M4A
+    ];
+
+    // Vérifier le type MIME
+    if (supportedTypes.includes(audioBlob.type)) {
+      return true;
+    }
+
+    // Vérifier si c'est un type générique audio
+    if (audioBlob.type.startsWith('audio/')) {
+      console.warn('Audio format may not be optimal for OpenAI Whisper:', {
+        function: 'OpenAITranscriber.isValidAudioFormat',
+        mimeType: audioBlob.type,
+        recommendation: 'Consider using MP3, WAV, or WebM format'
+      });
+      return true; // Permettre mais avertir
+    }
+
+    return false;
   }
 }
 

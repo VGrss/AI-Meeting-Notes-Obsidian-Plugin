@@ -148,9 +148,8 @@ export class RecordingModal extends Modal {
 			const transcriber = getTranscriberProvider(this.transcriberProviderId);
 			const summarizer = getSummarizerProvider(this.summarizerProviderId);
 			
-			// Pour l'instant, on assume que audioBlob est un Blob
-			// Dans un vrai cas d'usage, il faudrait sauvegarder le blob et passer le chemin
-			const transcript = await transcriber.transcribe(audioBlob as any);
+			// Transcribe the audio blob
+			const transcript = await transcriber.transcribe(audioBlob);
 			new TranscriptModal(this.app, summarizer, transcript.text).open();
 		} catch (error) {
 			new Notice('Transcription failed: ' + error.message);

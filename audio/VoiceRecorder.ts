@@ -155,7 +155,9 @@ export class VoiceRecorder {
 		return new Promise((resolve) => {
 			if (this.mediaRecorder) {
 				this.mediaRecorder.onstop = () => {
-					const audioBlob = new Blob(this.chunks, { type: 'audio/wav' });
+					// Utiliser le type MIME correct basé sur les paramètres d'enregistrement
+					const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
+					const audioBlob = new Blob(this.chunks, { type: mimeType });
 					this.cleanup();
 					resolve(audioBlob);
 				};

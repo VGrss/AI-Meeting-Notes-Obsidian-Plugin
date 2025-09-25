@@ -10,6 +10,7 @@ import {
   ProviderFactory 
 } from './src/providers';
 import { OpenAITranscriber, OpenAISummarizer } from './src/providers/openai';
+import { WhisperCppTranscriber, FasterWhisperTranscriber } from './src/providers/local';
 
 interface VoiceNotesSettings {
 	// API Keys - conditionnelles selon le provider choisi
@@ -207,9 +208,26 @@ export default class VoiceNotesPlugin extends Plugin {
 		registerProvider(openaiTranscriber);
 		registerProvider(openaiSummarizer);
 		
-		// TODO: Enregistrer les providers locaux quand ils seront implémentés
+		// Enregistrer les providers locaux
+		if (this.settings.localProviders.whispercpp.binaryPath && this.settings.localProviders.whispercpp.modelPath) {
+			const whisperCppTranscriber = new WhisperCppTranscriber({
+				binaryPath: this.settings.localProviders.whispercpp.binaryPath,
+				modelPath: this.settings.localProviders.whispercpp.modelPath,
+				extraArgs: this.settings.localProviders.whispercpp.extraArgs
+			});
+			registerProvider(whisperCppTranscriber);
+		}
+		
+		if (this.settings.localProviders.fasterwhisper.pythonPath && this.settings.localProviders.fasterwhisper.modelName) {
+			const fasterWhisperTranscriber = new FasterWhisperTranscriber({
+				pythonPath: this.settings.localProviders.fasterwhisper.pythonPath,
+				modelName: this.settings.localProviders.fasterwhisper.modelName
+			});
+			registerProvider(fasterWhisperTranscriber);
+		}
+		
+		// TODO: Enregistrer les providers de résumé locaux
 		// registerProvider(new OllamaSummarizer(this.settings.localProviders.ollama));
-		// registerProvider(new WhisperCppTranscriber(this.settings.localProviders.whispercpp));
 	}
 }
 
@@ -314,8 +332,8 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 					.setIcon('external-link')
 					.setTooltip('Get OpenAI API Key')
 					.onClick(() => {
-						// Utilisation de requestUrl pour la compatibilité multiplateforme
-						this.app.openExternal('https://platform.openai.com/api-keys');
+						// Ouvrir le lien dans le navigateur
+						window.open('https://platform.openai.com/api-keys', '_blank');
 					}));
 
 			containerEl.createEl('p', {

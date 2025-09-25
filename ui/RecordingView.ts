@@ -272,7 +272,7 @@ export class RecordingView extends ItemView {
 				const summarizer = getSummarizerProvider(this.summarizerProviderId);
 				
 				// Step 1: Transcribe audio
-				const transcriptResult = await transcriber.transcribe(audioBlob as any);
+				const transcriptResult = await transcriber.transcribe(audioBlob);
 				
 				// Update card with transcript and start summary processing
 				processingRecording.transcript = transcriptResult.text;

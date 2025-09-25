@@ -122,12 +122,12 @@ export interface TranscriberProvider {
   
   /**
    * Transcrit un fichier audio en texte
-   * @param audioPath Chemin vers le fichier audio
+   * @param audioInput Chemin vers le fichier audio ou Blob audio
    * @param opts Options optionnelles (langue, modèle, etc.)
    * @returns Promise avec le texte transcrit et métadonnées
    */
   transcribe(
-    audioPath: string, 
+    audioInput: string | Blob, 
     opts?: TranscriptionOptions
   ): Promise<TranscriptionResult>;
 }

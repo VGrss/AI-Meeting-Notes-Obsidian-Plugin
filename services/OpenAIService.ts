@@ -106,7 +106,7 @@ export class OpenAIService {
 				headers: {
 					'Authorization': `Bearer ${this.apiKey}`,
 				},
-				body: formData
+				body: formData as any
 			});
 
 			if (!response.status || response.status < 200 || response.status >= 300) {
