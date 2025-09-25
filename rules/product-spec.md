@@ -6,6 +6,8 @@
 
 ## 🏗️ Architecture et composants
 
+> **Note** : Pour une vue détaillée de l'architecture technique, consultez [architecture-overview.md](architecture-overview.md)
+
 ### Technologies utilisées
 - **Framework** : Plugin Obsidian (TypeScript/JavaScript)
 - **Architecture** : Système multi-providers modulaire

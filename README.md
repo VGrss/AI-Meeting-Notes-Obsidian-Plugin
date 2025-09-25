@@ -46,8 +46,7 @@ This will start the build process in watch mode.
 ## 📚 Documentation
 
 - [Product Specification](rules/product-spec.md) - Complete product overview and features
-- [Local Providers Setup](rules/local-providers.md) - Guide for setting up local AI providers
-- [Multi-Providers Configuration](rules/multi-providers-setup.md) - Advanced provider configuration
+- [Architecture Overview](rules/architecture-overview.md) - Technical architecture and code navigation guide
 - [Release Procedure](rules/RELEASE_PROCEDURE.md) - Development and release guidelines
 
 ## 🤝 Contributing

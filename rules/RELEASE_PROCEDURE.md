@@ -125,8 +125,6 @@ touch "release notes/RELEASE_NOTES_vX.Y.Z.md"
 4. Configurez vos providers préférés dans les paramètres du plugin
 
 ## 🔗 Liens utiles
-- [Documentation des providers locaux](rules/local-providers.md)
-- [Guide de configuration multi-providers](rules/multi-providers-setup.md)
 - [Spécifications du produit](rules/product-spec.md)
 
 ---
@@ -282,6 +280,6 @@ En cas de problème :
 
 ---
 
-**Dernière mise à jour** : 25 septembre 2024  
-**Version de la procédure** : 1.0  
+**Dernière mise à jour** : 25 septembre 2025
+**Version de la procédure** : 1.0
 **Auteur** : Victor Gross
