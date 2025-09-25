@@ -7,7 +7,8 @@ import {
   registerProvider, 
   getTranscriberProvider, 
   getSummarizerProvider,
-  ProviderFactory 
+  ProviderFactory,
+  clearRegistry
 } from './src/providers';
 import { OpenAITranscriber, OpenAISummarizer } from './src/providers/openai';
 import { WhisperCppTranscriber, FasterWhisperTranscriber } from './src/providers/local';
@@ -190,6 +191,8 @@ export default class VoiceNotesPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData({ settings: this.settings, recordings: this.recordings });
+		// Réinitialiser les providers quand les paramètres changent
+		this.initializeProviders();
 	}
 
 	addRecording(recording: RecordingData) {
@@ -201,6 +204,9 @@ export default class VoiceNotesPlugin extends Plugin {
 	 * Initialise tous les providers disponibles
 	 */
 	private initializeProviders() {
+		// Vider le registry avant de réinitialiser
+		this.clearProviders();
+		
 		// Enregistrer les providers OpenAI
 		const openaiTranscriber = new OpenAITranscriber(this.settings.openaiApiKey);
 		const openaiSummarizer = new OpenAISummarizer(this.settings.openaiApiKey, this.settings.customSummaryPrompt);
@@ -228,6 +234,13 @@ export default class VoiceNotesPlugin extends Plugin {
 		
 		// TODO: Enregistrer les providers de résumé locaux
 		// registerProvider(new OllamaSummarizer(this.settings.localProviders.ollama));
+	}
+
+	/**
+	 * Vide tous les providers du registry
+	 */
+	private clearProviders() {
+		clearRegistry();
 	}
 }
 

@@ -268,11 +268,28 @@ export class RecordingView extends ItemView {
 			new Notice('Recording complete. Processing...');
 			
 			try {
+				console.log('🔄 Début du traitement de l\'enregistrement...', {
+					transcriberProviderId: this.transcriberProviderId,
+					summarizerProviderId: this.summarizerProviderId,
+					audioBlobSize: audioBlob.size,
+					audioBlobType: audioBlob.type
+				});
+
 				const transcriber = getTranscriberProvider(this.transcriberProviderId);
 				const summarizer = getSummarizerProvider(this.summarizerProviderId);
 				
+				console.log('✅ Providers récupérés:', {
+					transcriber: transcriber.name,
+					summarizer: summarizer.name
+				});
+				
 				// Step 1: Transcribe audio
+				console.log('🎯 Début de la transcription...');
 				const transcriptResult = await transcriber.transcribe(audioBlob);
+				console.log('✅ Transcription terminée:', {
+					textLength: transcriptResult.text.length,
+					language: transcriptResult.lang
+				});
 				
 				// Update card with transcript and start summary processing
 				processingRecording.transcript = transcriptResult.text;
@@ -298,12 +315,28 @@ export class RecordingView extends ItemView {
 				this.refreshRecordingHistory(historyListEl);
 				new Notice('Recording processed and saved!');
 			} catch (error) {
+				console.error('❌ Erreur lors du traitement:', error);
+				
+				// Déterminer le type d'erreur et afficher un message approprié
+				let errorMessage = 'Erreur inconnue';
+				if (error.message.includes('Provider non trouvé')) {
+					errorMessage = 'Provider de transcription non configuré. Vérifiez vos paramètres.';
+				} else if (error.message.includes('Clé API OpenAI')) {
+					errorMessage = 'Clé API OpenAI manquante ou invalide. Vérifiez vos paramètres.';
+				} else if (error.message.includes('Fichier audio trop volumineux')) {
+					errorMessage = 'Fichier audio trop volumineux. Essayez un enregistrement plus court.';
+				} else if (error.message.includes('Format non supporté')) {
+					errorMessage = 'Format audio non supporté. Vérifiez votre navigateur.';
+				} else {
+					errorMessage = error.message || 'Erreur de traitement';
+				}
+				
 				// Update card to show error state
-				processingRecording.transcript = '❌ Processing failed';
-				processingRecording.summary = `❌ Error: ${error.message}`;
-				processingRecording.topic = '❌ Failed';
+				processingRecording.transcript = '❌ Échec de la transcription';
+				processingRecording.summary = `❌ Erreur: ${errorMessage}`;
+				processingRecording.topic = '❌ Échec';
 				this.refreshRecordingHistory(historyListEl);
-				new Notice('Processing failed: ' + error.message);
+				new Notice(`Traitement échoué: ${errorMessage}`);
 			}
 		}
 	}
