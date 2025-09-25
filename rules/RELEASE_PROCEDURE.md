@@ -142,10 +142,44 @@ npm run build
 # 2. Vérifier que les fichiers sont générés
 ls -la main.js manifest.json
 
-# 3. Tester localement dans Obsidian
-# - Copier main.js et manifest.json vers le dossier de plugins
-# - Redémarrer Obsidian
-# - Tester les fonctionnalités principales
+# 3. Mise à jour locale automatique (recommandé)
+# Utiliser le script de mise à jour locale (voir section 7.2)
+```
+
+#### 5.1 Script de mise à jour locale rapide (Optionnel)
+Créer un script `update-local.sh` pour automatiser la mise à jour locale :
+
+```bash
+#!/bin/bash
+# Script de mise à jour locale rapide
+
+OBSIDIAN_PLUGIN_PATH="/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vic Brain/.obsidian/plugins/ai-voice-meeting-notes/"
+
+echo "🔄 Mise à jour locale du plugin AI Voice Meeting Notes..."
+
+# Vérifier que les fichiers existent
+if [ ! -f "main.js" ] || [ ! -f "manifest.json" ]; then
+    echo "❌ Erreur: main.js ou manifest.json introuvable"
+    echo "Lancez d'abord: npm run build"
+    exit 1
+fi
+
+# Copier les fichiers
+cp main.js "$OBSIDIAN_PLUGIN_PATH/"
+cp manifest.json "$OBSIDIAN_PLUGIN_PATH/"
+
+echo "✅ Mise à jour locale terminée!"
+echo "📋 Version: $(grep '"version"' manifest.json | cut -d'"' -f4)"
+echo "🎯 Redémarrez Obsidian pour appliquer les changements"
+```
+
+**Utilisation :**
+```bash
+# Rendre le script exécutable
+chmod +x update-local.sh
+
+# Lancer la mise à jour locale
+./update-local.sh
 ```
 
 ### 6. 📤 Déploiement sur GitHub
@@ -179,25 +213,70 @@ git push origin vX.Y.Z
    - **Description** : Copier le contenu du fichier `release notes/RELEASE_NOTES_vX.Y.Z.md`
    - **Attacher les fichiers** : `main.js` et `manifest.json`
 
-### 7. 🏠 Déploiement Local
+### 7. 🏠 Déploiement Local (OBLIGATOIRE)
+
+> **⚠️ IMPORTANT** : Cette étape est maintenant **obligatoire** pour s'assurer que la version locale soit toujours à jour.
 
 #### 7.1 Localisation du dossier Obsidian
 ```bash
-# Dossier de plugins Obsidian
-/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vic Brain/.obsidian/plugins/ai-voice-meeting-notes/
+# Dossier de plugins Obsidian (à adapter selon votre configuration)
+OBSIDIAN_PLUGIN_PATH="/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vic Brain/.obsidian/plugins/ai-voice-meeting-notes/"
 ```
 
-#### 7.2 Mise à jour locale
+#### 7.2 Script de mise à jour locale
 ```bash
-# 1. Sauvegarder l'ancienne version (optionnel)
-cp "/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vic Brain/.obsidian/plugins/ai-voice-meeting-notes/main.js" main.js.backup
+# 1. Vérifier que le dossier de destination existe
+if [ ! -d "$OBSIDIAN_PLUGIN_PATH" ]; then
+    echo "❌ Erreur: Dossier de plugins Obsidian introuvable: $OBSIDIAN_PLUGIN_PATH"
+    echo "Veuillez ajuster la variable OBSIDIAN_PLUGIN_PATH dans ce script"
+    exit 1
+fi
 
-# 2. Copier les nouveaux fichiers
-cp main.js "/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vic Brain/.obsidian/plugins/ai-voice-meeting-notes/"
-cp manifest.json "/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian/Documents/Vic Brain/.obsidian/plugins/ai-voice-meeting-notes/"
+# 2. Sauvegarder l'ancienne version (optionnel mais recommandé)
+echo "📦 Sauvegarde de l'ancienne version..."
+cp "$OBSIDIAN_PLUGIN_PATH/main.js" "main.js.backup.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || echo "⚠️ Aucune ancienne version à sauvegarder"
 
-# 3. Redémarrer Obsidian
-# 4. Tester les fonctionnalités
+# 3. Copier les nouveaux fichiers
+echo "🔄 Mise à jour des fichiers..."
+cp main.js "$OBSIDIAN_PLUGIN_PATH/"
+cp manifest.json "$OBSIDIAN_PLUGIN_PATH/"
+
+# 4. Vérifier la copie
+if [ -f "$OBSIDIAN_PLUGIN_PATH/main.js" ] && [ -f "$OBSIDIAN_PLUGIN_PATH/manifest.json" ]; then
+    echo "✅ Mise à jour locale réussie!"
+    echo "📊 Taille du nouveau main.js: $(ls -lh main.js | awk '{print $5}')"
+    echo "📋 Version: $(grep '"version"' manifest.json | cut -d'"' -f4)"
+else
+    echo "❌ Erreur lors de la copie des fichiers"
+    exit 1
+fi
+
+# 5. Instructions pour l'utilisateur
+echo ""
+echo "🎯 Prochaines étapes:"
+echo "1. Redémarrez Obsidian pour que les changements prennent effet"
+echo "2. Vérifiez la version dans Settings → Community Plugins → AI Voice Meeting Notes"
+echo "3. Testez les nouvelles fonctionnalités"
+echo ""
+echo "📍 Fichiers mis à jour:"
+echo "   - $OBSIDIAN_PLUGIN_PATH/main.js"
+echo "   - $OBSIDIAN_PLUGIN_PATH/manifest.json"
+```
+
+#### 7.3 Vérification de la mise à jour locale
+```bash
+# Vérifier que la version locale correspond à la version du projet
+LOCAL_VERSION=$(grep '"version"' "$OBSIDIAN_PLUGIN_PATH/manifest.json" | cut -d'"' -f4)
+PROJECT_VERSION=$(grep '"version"' manifest.json | cut -d'"' -f4)
+
+if [ "$LOCAL_VERSION" = "$PROJECT_VERSION" ]; then
+    echo "✅ Versions synchronisées: $PROJECT_VERSION"
+else
+    echo "❌ Versions désynchronisées:"
+    echo "   Local: $LOCAL_VERSION"
+    echo "   Projet: $PROJECT_VERSION"
+    echo "   Relancez la mise à jour locale"
+fi
 ```
 
 ### 8. ✅ Vérifications Post-Déploiement
@@ -209,6 +288,8 @@ cp manifest.json "/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian
 - [ ] Fichiers attachés (main.js, manifest.json)
 
 #### 8.2 Vérifications Locales
+- [ ] **Mise à jour locale effectuée** : Fichiers copiés vers Obsidian
+- [ ] **Versions synchronisées** : Version locale = version projet
 - [ ] Plugin se charge sans erreur
 - [ ] Interface utilisateur fonctionne
 - [ ] Fonctionnalités principales testées
@@ -221,10 +302,43 @@ cp manifest.json "/Users/victorgross/Library/Mobile Documents/iCloud~md~obsidian
 - [ ] Version cohérente partout
 - [ ] Liens fonctionnels
 
+## 🚀 Scripts d'Automatisation
+
+### Script de Mise à Jour Locale Rapide
+Le script `update-local.sh` permet de mettre à jour rapidement votre installation locale :
+
+```bash
+# Utilisation simple
+./update-local.sh
+
+# Le script fait automatiquement :
+# 1. Vérification des fichiers source
+# 2. Sauvegarde de l'ancienne version
+# 3. Copie des nouveaux fichiers
+# 4. Vérification de la synchronisation des versions
+# 5. Instructions pour redémarrer Obsidian
+```
+
+### Workflow Recommandé
+```bash
+# 1. Développement et tests
+npm run build
+./update-local.sh
+
+# 2. Test local dans Obsidian
+# (Redémarrer Obsidian et tester)
+
+# 3. Si tout fonctionne, publier
+git add .
+git commit -m "feat: ..."
+git push origin main
+```
+
 ## 🚨 Points d'Attention
 
 ### ⚠️ Avant la Publication
 - **Toujours tester localement** avant de publier
+- **Utiliser le script update-local.sh** pour la mise à jour locale
 - **Vérifier les breaking changes** et les documenter
 - **S'assurer que tous les fichiers sont à jour**
 - **Tester avec différents providers** si applicable
