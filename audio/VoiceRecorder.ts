@@ -1,3 +1,5 @@
+import { TrackingService } from '../services/TrackingService';
+
 /**
  * Gestionnaire d'enregistrement audio avec compression et optimisations
  */
@@ -5,6 +7,8 @@ export class VoiceRecorder {
 	mediaRecorder: MediaRecorder | null = null;
 	stream: MediaStream | null = null;
 	chunks: Blob[] = [];
+	private trackingService: TrackingService;
+	private recordingStartTime: number = 0;
 	
 	// Audio compression settings for smaller file sizes
 	private readonly AUDIO_SETTINGS = {
@@ -25,6 +29,7 @@ export class VoiceRecorder {
 	];
 
 	constructor() {
+		this.trackingService = TrackingService.getInstance();
 	}
 
 	private getBestAudioSettings(): MediaRecorderOptions {
@@ -54,7 +59,15 @@ export class VoiceRecorder {
 	}
 
 	async start(): Promise<void> {
+		this.recordingStartTime = Date.now();
+		
 		try {
+			// Tracking du démarrage d'enregistrement
+			this.trackingService.trackRecordingStart({
+				userAgent: navigator.userAgent,
+				chunkDurationMs: this.CHUNK_DURATION_MS
+			});
+
 			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 				const error = new Error('getUserMedia not supported in this browser');
 				console.error('getUserMedia not supported:', {
@@ -62,6 +75,13 @@ export class VoiceRecorder {
 					reason: 'getUserMedia_not_supported',
 					userAgent: navigator.userAgent
 				});
+				
+				// Tracking de l'erreur
+				this.trackingService.trackRecordingError(error, {
+					reason: 'getUserMedia_not_supported',
+					userAgent: navigator.userAgent
+				});
+				
 				throw error;
 			}
 			
@@ -99,6 +119,12 @@ export class VoiceRecorder {
 					eventType: event.type,
 					error: error
 				});
+				
+				// Tracking de l'erreur MediaRecorder
+				this.trackingService.trackRecordingError(error, {
+					eventType: event.type,
+					recorderState: this.mediaRecorder?.state
+				});
 			};
 
 			// Start recording with chunking for better file size management
@@ -135,6 +161,10 @@ export class VoiceRecorder {
 				error: enhancedError,
 				context: errorContext
 			});
+			
+			// Tracking de l'erreur d'enregistrement
+			this.trackingService.trackRecordingError(enhancedError, errorContext);
+			
 			throw enhancedError;
 		}
 	}
@@ -158,6 +188,15 @@ export class VoiceRecorder {
 					// Utiliser le type MIME correct basé sur les paramètres d'enregistrement
 					const mimeType = this.mediaRecorder?.mimeType || 'audio/webm';
 					const audioBlob = new Blob(this.chunks, { type: mimeType });
+					
+					// Tracking de l'arrêt d'enregistrement
+					const duration = Date.now() - this.recordingStartTime;
+					this.trackingService.trackRecordingStop(duration / 1000, {
+						audioSizeBytes: audioBlob.size,
+						mimeType: mimeType,
+						chunksCount: this.chunks.length
+					});
+					
 					this.cleanup();
 					resolve(audioBlob);
 				};

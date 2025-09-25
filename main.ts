@@ -12,11 +12,13 @@ import {
 } from './src/providers';
 import { OpenAITranscriber, OpenAISummarizer } from './src/providers/openai';
 import { WhisperCppTranscriber, FasterWhisperTranscriber } from './src/providers/local';
+import { TrackingService } from './services/TrackingService';
 
 interface VoiceNotesSettings {
 	// API Keys - conditionnelles selon le provider choisi
 	openaiApiKey: string;
 	glitchTipDsn: string;
+	glitchTipEnabled: boolean;
 	
 	// Provider settings
 	transcriberProvider: 'openai-whisper' | 'whispercpp' | 'fasterwhisper';
@@ -61,6 +63,7 @@ CRITICAL: Your entire response must be in the same language as the transcript. D
 const DEFAULT_SETTINGS: VoiceNotesSettings = {
 	openaiApiKey: '',
 	glitchTipDsn: 'https://fc4c4cf2c55b4aaaa076954be7e02814@app.glitchtip.com/12695',
+	glitchTipEnabled: true,
 	customSummaryPrompt: DEFAULT_SUMMARY_PROMPT,
 	
 	// Provider settings
@@ -95,9 +98,14 @@ export default class VoiceNotesPlugin extends Plugin {
 	settings: VoiceNotesSettings;
 	statusBarItem: HTMLElement;
 	recordings: RecordingData[] = [];
+	trackingService: TrackingService;
 
 	async onload() {
 		await this.loadSettings();
+		
+		// Initialize tracking service
+		this.trackingService = TrackingService.getInstance();
+		this.trackingService.init(this.settings.glitchTipDsn, this.settings.glitchTipEnabled);
 		
 		// Initialize providers
 		this.initializeProviders();

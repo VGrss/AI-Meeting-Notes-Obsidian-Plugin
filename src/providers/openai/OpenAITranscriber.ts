@@ -12,6 +12,7 @@ import {
 } from '../types';
 import { ProviderError, ProviderErrorCode } from '../errors';
 import { requestUrl } from 'obsidian';
+import { TrackingService } from '../../../services/TrackingService';
 
 export class OpenAITranscriber implements TranscriberProvider {
   id = 'openai-whisper';
@@ -19,6 +20,7 @@ export class OpenAITranscriber implements TranscriberProvider {
   type = 'cloud' as const;
 
   private apiKey: string;
+  private trackingService: TrackingService;
 
   // OpenAI Whisper limits: 25MB max file size
   private readonly MAX_FILE_SIZE = 25 * 1024 * 1024; // 25MB in bytes
@@ -26,6 +28,7 @@ export class OpenAITranscriber implements TranscriberProvider {
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
+    this.trackingService = TrackingService.getInstance();
   }
 
   async check(): Promise<ProviderHealth> {
@@ -73,6 +76,8 @@ export class OpenAITranscriber implements TranscriberProvider {
   }
 
   async transcribe(audioInput: string | Blob, opts?: TranscriptionOptions): Promise<TranscriptionResult> {
+    const startTime = Date.now();
+    
     try {
       if (!this.apiKey) {
         throw ProviderError.authInvalid(this.id, 'Clé API OpenAI requise');
@@ -90,6 +95,13 @@ export class OpenAITranscriber implements TranscriberProvider {
       } else {
         audioBlob = audioInput;
       }
+
+      // Tracking du démarrage de transcription
+      this.trackingService.trackTranscriptionStart(this.id, audioBlob.size, {
+        audioType: audioBlob.type,
+        language: opts?.language,
+        model: opts?.model
+      });
 
       // Pre-flight size check
       const sizeCheck = this.checkFileSize(audioBlob);
@@ -177,8 +189,8 @@ export class OpenAITranscriber implements TranscriberProvider {
         transcriptLength: result.text?.length || 0,
         mimeType: audioBlob.type
       });
-      
-      return {
+
+      const transcriptionResult = {
         text: result.text,
         lang: result.language,
         segments: result.segments?.map((seg: any) => ({
@@ -190,10 +202,29 @@ export class OpenAITranscriber implements TranscriberProvider {
         metadata: {
           duration: result.duration,
           model: 'whisper-1',
-          processingTime: Date.now(), // Approximation
+          processingTime: Date.now() - startTime,
         }
       };
+
+      // Tracking du succès de transcription
+      this.trackingService.trackTranscriptionSuccess(this.id, transcriptionResult, Date.now() - startTime, {
+        audioBlobSize: audioBlob.size,
+        transcriptLength: result.text?.length || 0,
+        mimeType: audioBlob.type,
+        language: result.language,
+        segmentsCount: result.segments?.length || 0
+      });
+      
+      return transcriptionResult;
     } catch (error) {
+      // Tracking de l'erreur de transcription
+      this.trackingService.trackTranscriptionError(this.id, error as Error, {
+        audioInputType: typeof audioInput,
+        audioSize: typeof audioInput === 'string' ? 'unknown' : audioInput.size,
+        processingTime: Date.now() - startTime,
+        errorType: error instanceof ProviderError ? 'provider_error' : 'unexpected_error'
+      });
+
       if (error instanceof ProviderError) {
         throw error;
       }

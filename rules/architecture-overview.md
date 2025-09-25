@@ -172,7 +172,7 @@ interface VoiceNotesSettings {
 }
 ```
 
-### Configuration GlitchTip (Monitoring d'Erreurs)
+### Configuration GlitchTip (Tracking Cross-Provider)
 
 #### Setup Initial
 1. **Créer un compte** sur [GlitchTip](https://glitchtip.com/)
@@ -180,10 +180,25 @@ interface VoiceNotesSettings {
 3. **Récupérer le DSN** depuis les paramètres du projet
 4. **Configurer dans Obsidian** : Settings → AI Voice Meeting Notes → GlitchTip DSN
 
+#### Configuration du Tracking Cross-Provider
+```typescript
+interface VoiceNotesSettings {
+  glitchTipDsn: string;        // DSN Glitchtip
+  glitchTipEnabled: boolean;   // Activation/désactivation
+}
+```
+
+#### DSN Glitchtip configuré
+```
+https://fc4c4cf2c55b4aaaa076954be7e02814@app.glitchtip.com/12695
+```
+
+**Note de sécurité** : Les clés sont cachées dans le code pour des raisons de sécurité.
+
 #### Configuration Avancée
 ```typescript
-// ErrorTrackingService.ts
-class ErrorTrackingService {
+// TrackingService.ts
+class TrackingService {
   init(dsn: string, enabled: boolean): void {
     if (enabled && dsn) {
       // Configuration Sentry/GlitchTip
@@ -200,12 +215,39 @@ class ErrorTrackingService {
 }
 ```
 
-#### Types d'Erreurs Trackées
-- **Erreurs de transcription** : Échecs API Whisper
-- **Erreurs de résumé** : Échecs API GPT-4o
-- **Erreurs de providers** : Problèmes de configuration
-- **Erreurs d'enregistrement** : Problèmes audio
-- **Erreurs d'interface** : Problèmes UI/UX
+#### Données Collectées par le Tracking
+
+##### Métadonnées de session
+- ID de session unique
+- Timestamps de début/fin
+- Providers utilisés (recording, transcription, summarization)
+- Nombre d'étapes exécutées
+
+##### Métadonnées d'enregistrement
+- Durée d'enregistrement
+- Taille du fichier audio
+- Type MIME
+- Nombre de chunks
+
+##### Métadonnées de transcription
+- Taille du fichier audio
+- Longueur du texte transcrit
+- Langue détectée
+- Nombre de segments
+- Temps de traitement
+
+##### Métadonnées de résumé
+- Longueur du texte source
+- Longueur du résumé généré
+- Tokens utilisés
+- Ratio de compression
+- Temps de traitement
+
+#### Types d'Événements Trackés
+- **Pipeline d'enregistrement** : `recording_start`, `recording_stop`, `recording_error`
+- **Pipeline de transcription** : `transcription_start`, `transcription_success`, `transcription_error`
+- **Pipeline de résumé IA** : `summarization_start`, `summarization_success`, `summarization_error`
+- **Pipeline complet** : `pipeline_complete`, `pipeline_error_*`
 
 ### Configuration des Providers Locaux
 

@@ -1,6 +1,7 @@
 import { App, Notice, WorkspaceLeaf, ItemView, Modal } from 'obsidian';
 import { VoiceRecorder } from '../audio/VoiceRecorder';
 import { getTranscriberProvider, getSummarizerProvider } from '../src/providers';
+import { TrackingService } from '../services/TrackingService';
 
 /**
  * Interface pour les données d'enregistrement
@@ -29,6 +30,7 @@ export class RecordingView extends ItemView {
 	// Services
 	private transcriberProviderId: string;
 	private summarizerProviderId: string;
+	private trackingService: TrackingService;
 	
 	// Callbacks
 	private onAddRecording: (recording: RecordingData) => void;
@@ -49,6 +51,7 @@ export class RecordingView extends ItemView {
 		this.recordings = recordings;
 		this.onAddRecording = onAddRecording;
 		this.onSaveSettings = onSaveSettings;
+		this.trackingService = TrackingService.getInstance();
 	}
 
 	getViewType(): string {
@@ -268,11 +271,19 @@ export class RecordingView extends ItemView {
 			new Notice('Recording complete. Processing...');
 			
 			try {
+				// Démarrage d'une nouvelle session de pipeline
+				const sessionId = this.trackingService.startPipelineSession(
+					'voice-recorder',
+					this.transcriberProviderId,
+					this.summarizerProviderId
+				);
+
 				console.log('🔄 Début du traitement de l\'enregistrement...', {
 					transcriberProviderId: this.transcriberProviderId,
 					summarizerProviderId: this.summarizerProviderId,
 					audioBlobSize: audioBlob.size,
-					audioBlobType: audioBlob.type
+					audioBlobType: audioBlob.type,
+					sessionId
 				});
 
 				const transcriber = getTranscriberProvider(this.transcriberProviderId);
@@ -310,12 +321,30 @@ export class RecordingView extends ItemView {
 				processingRecording.summary = summaryResult.summary;
 				processingRecording.topic = topicResult.summary;
 				
+				// Finalisation de la session de pipeline
+				this.trackingService.completePipelineSession({
+					recordingId: processingRecording.id,
+					audioBlobSize: audioBlob.size,
+					transcriptLength: transcriptResult.text.length,
+					summaryLength: summaryResult.summary.length,
+					topicLength: topicResult.summary.length,
+					language: transcriptResult.lang
+				});
+				
 				// Save to plugin data
 				await this.onSaveSettings();
 				this.refreshRecordingHistory(historyListEl);
 				new Notice('Recording processed and saved!');
 			} catch (error) {
 				console.error('❌ Erreur lors du traitement:', error);
+				
+				// Tracking de l'erreur de pipeline
+				this.trackingService.trackPipelineError('processing', error as Error, {
+					recordingId: processingRecording.id,
+					audioBlobSize: audioBlob.size,
+					transcriberProviderId: this.transcriberProviderId,
+					summarizerProviderId: this.summarizerProviderId
+				});
 				
 				// Déterminer le type d'erreur et afficher un message approprié
 				let errorMessage = 'Erreur inconnue';

@@ -11,6 +11,7 @@ import {
 } from '../types';
 import { ProviderError, ProviderErrorCode } from '../errors';
 import { requestUrl } from 'obsidian';
+import { TrackingService } from '../../../services/TrackingService';
 
 export class OpenAISummarizer implements SummarizerProvider {
   id = 'openai-gpt4o';
@@ -19,10 +20,12 @@ export class OpenAISummarizer implements SummarizerProvider {
 
   private apiKey: string;
   private customSummaryPrompt: string;
+  private trackingService: TrackingService;
 
   constructor(apiKey: string, customSummaryPrompt: string) {
     this.apiKey = apiKey;
     this.customSummaryPrompt = customSummaryPrompt;
+    this.trackingService = TrackingService.getInstance();
   }
 
   async check(): Promise<ProviderHealth> {
@@ -70,10 +73,20 @@ export class OpenAISummarizer implements SummarizerProvider {
   }
 
   async summarize(text: string, opts?: SummarizationOptions): Promise<SummarizationResult> {
+    const startTime = Date.now();
+    
     try {
       if (!this.apiKey) {
         throw ProviderError.authInvalid(this.id, 'Clé API OpenAI requise');
       }
+
+      // Tracking du démarrage de résumé
+      this.trackingService.trackSummarizationStart(this.id, text.length, {
+        originalTextLength: text.length,
+        style: opts?.style,
+        language: opts?.language,
+        hasCustomPrompt: !!opts?.customPrompt
+      });
 
       // Handle very long transcripts by intelligent truncation
       let processedText = text;
@@ -149,18 +162,39 @@ ${processedText}`
         summaryLength: summary?.length || 0,
         wasTruncated: text.length !== processedText.length
       });
-      
-      return {
+
+      const summarizationResult = {
         summary,
         tokens: result.usage?.total_tokens,
         metadata: {
           originalLength: text.length,
           compressionRatio: summary.length / text.length,
           model: 'gpt-4o',
-          processingTime: Date.now(), // Approximation
+          processingTime: Date.now() - startTime,
         }
       };
+
+      // Tracking du succès de résumé
+      this.trackingService.trackSummarizationSuccess(this.id, summarizationResult, Date.now() - startTime, {
+        originalTextLength: text.length,
+        processedTextLength: processedText.length,
+        summaryLength: summary?.length || 0,
+        wasTruncated: text.length !== processedText.length,
+        tokensUsed: result.usage?.total_tokens,
+        compressionRatio: summary.length / text.length
+      });
+      
+      return summarizationResult;
     } catch (error) {
+      // Tracking de l'erreur de résumé
+      this.trackingService.trackSummarizationError(this.id, error as Error, {
+        originalTextLength: text.length,
+        processingTime: Date.now() - startTime,
+        errorType: error instanceof ProviderError ? 'provider_error' : 'unexpected_error',
+        style: opts?.style,
+        language: opts?.language
+      });
+
       if (error instanceof ProviderError) {
         throw error;
       }
