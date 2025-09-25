@@ -225,27 +225,7 @@
 	width: 100%;
 }
 
-.primary-button {
-	width: 100%;
-	height: 40px;
-	background: var(--text-normal);
-	color: var(--text-on-accent);
-	border: none;
-	border-radius: 6px;
-	font-size: 14px;
-	font-weight: 500;
-	cursor: pointer;
-	transition: all 0.15s ease-in-out;
-}
-
-.primary-button:hover:not(:disabled) {
-	background: var(--text-muted);
-}
-
-.primary-button:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
+/* Primary button styles are now handled by .start-recording-button */
 
 .secondary-button {
 	width: 100%;
@@ -291,12 +271,13 @@
 	cursor: not-allowed;
 }
 
-.stop-recording-button {
+/* Start Recording Button States */
+.start-recording-button {
 	width: 100%;
 	height: 40px;
-	background: #dc3545;
-	color: white;
-	border: 1px solid #dc3545;
+	background: var(--text-normal);
+	color: var(--text-on-accent);
+	border: none;
 	border-radius: 6px;
 	font-size: 14px;
 	font-weight: 500;
@@ -304,7 +285,17 @@
 	transition: all 0.15s ease-in-out;
 }
 
-.stop-recording-button:hover:not(:disabled) {
+.start-recording-button:hover:not(:disabled) {
+	background: var(--text-muted);
+}
+
+.start-recording-button.recording-active {
+	background: #dc3545;
+	color: white;
+	border: 1px solid #dc3545;
+}
+
+.start-recording-button.recording-active:hover:not(:disabled) {
 	background: #c82333;
 	border-color: #c82333;
 }
@@ -513,15 +504,15 @@
 }
 
 /* Processing Status Styles */
-.card-title:contains("⏳"),
-.content-paragraph:contains("⏳") {
+.card-title.processing,
+.content-paragraph.processing {
 	color: var(--text-muted);
 	font-style: italic;
 	animation: pulse 2s ease-in-out infinite;
 }
 
-.card-title:contains("❌"),
-.content-paragraph:contains("❌") {
+.card-title.error,
+.content-paragraph.error {
 	color: var(--text-error);
 }
 
@@ -568,6 +559,12 @@
 	color: var(--text-accent);
 	font-size: var(--font-ui-smaller);
 	margin-top: 10px;
+}
+
+/* Custom Summary Prompt Text Area */
+.custom-summary-prompt-textarea {
+	width: 100% !important;
+	min-height: 150px !important;
 }
 
 /* Confirmation Modal Styles */

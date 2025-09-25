@@ -1,0 +1,30 @@
+Extrait de réunion - Test multi-providers
+==========================================
+
+Date: 2024-01-15
+Durée: 10 secondes
+Participants: Équipe de développement
+
+Transcription de test:
+"Bonjour tout le monde, nous sommes réunis aujourd'hui pour discuter de l'implémentation de l'architecture multi-providers dans notre plugin Obsidian. L'objectif est de permettre aux utilisateurs de choisir entre différents services de transcription, incluant des options locales pour préserver la confidentialité des données."
+
+Sujets abordés:
+- Architecture multi-providers
+- Confidentialité des données
+- Options de transcription locales
+- Plugin Obsidian
+
+Décisions prises:
+- Implémentation progressive avec garde-fous
+- Maintien de la compatibilité avec OpenAI par défaut
+- Tests de régression obligatoires
+
+Actions à entreprendre:
+- [ ] Créer l'interface de configuration des providers
+- [ ] Implémenter les providers locaux
+- [ ] Ajouter les tests de validation
+- [ ] Documenter l'utilisation
+
+Notes techniques:
+Ce fichier sert de sample pour tester les fonctionnalités de résumé et de transcription dans l'environnement multi-providers.
+
