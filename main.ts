@@ -459,35 +459,5 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 			cls: 'help-text'
 		});
 
-		// Monitoring Section (simplified)
-		containerEl.createEl('h3', { text: '🛡️ Monitoring' });
-		
-		containerEl.createEl('p', {
-			text: 'Error monitoring configuration with GlitchTip to improve plugin reliability.',
-			cls: 'setting-description'
-		});
-
-		new Setting(containerEl)
-			.setName('GlitchTip Token')
-			.setDesc('Error monitoring token (configured by default)')
-			.addText(text => {
-				text.setValue(this.plugin.settings.glitchTipDsn);
-				text.inputEl.type = 'password';
-				text.onChange(async (value) => {
-					this.plugin.settings.glitchTipDsn = value;
-					await this.plugin.saveSettings();
-				});
-			})
-			.addExtraButton(button => button
-				.setIcon('external-link')
-				.setTooltip('Learn more about GlitchTip')
-				.onClick(() => {
-					window.open('https://glitchtip.com/', '_blank');
-				}));
-
-		containerEl.createEl('p', {
-			text: '💡 GlitchTip is an open-source error tracking service. The default token is configured for automatic monitoring.',
-			cls: 'help-text'
-		});
 	}
 }

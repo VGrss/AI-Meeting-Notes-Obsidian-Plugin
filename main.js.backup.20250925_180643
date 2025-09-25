@@ -1624,22 +1624,22 @@ var VoiceNotesSettingTab = class extends import_obsidian4.PluginSettingTab {
     containerEl.empty();
     containerEl.createEl("h2", { text: "AI Voice Meeting Notes Settings" });
     containerEl.createEl("p", {
-      text: "Configurez votre plugin de prise de notes vocales avec IA. Choisissez vos providers de transcription et de r\xE9sum\xE9 selon vos besoins.",
+      text: "Configure your AI-powered voice note-taking plugin. Choose your transcription and summary providers according to your needs.",
       cls: "setting-description"
     });
-    containerEl.createEl("h3", { text: "\u{1F916} Configuration des Providers" });
+    containerEl.createEl("h3", { text: "\u{1F916} Provider Configuration" });
     containerEl.createEl("p", {
-      text: "S\xE9lectionnez les providers pour la transcription audio et le r\xE9sum\xE9 IA. La cl\xE9 OpenAI n'est requise que pour les providers cloud OpenAI.",
+      text: "Select providers for audio transcription and AI summarization. OpenAI API key is only required for OpenAI cloud providers.",
       cls: "setting-description"
     });
-    new import_obsidian4.Setting(containerEl).setName("Provider de Transcription").setDesc("Choisissez le service de transcription audio").addDropdown((dropdown) => {
+    new import_obsidian4.Setting(containerEl).setName("Transcription Provider").setDesc("Choose the audio transcription service").addDropdown((dropdown) => {
       dropdown.addOption("openai-whisper", "OpenAI Whisper (Cloud)").addOption("whispercpp", "Whisper.cpp (Local)").addOption("fasterwhisper", "FasterWhisper (Local)").setValue(this.plugin.settings.transcriberProvider).onChange(async (value) => {
         this.plugin.settings.transcriberProvider = value;
         await this.plugin.saveSettings();
         this.display();
       });
     });
-    new import_obsidian4.Setting(containerEl).setName("Provider de R\xE9sum\xE9").setDesc("Choisissez le service de r\xE9sum\xE9 IA").addDropdown((dropdown) => {
+    new import_obsidian4.Setting(containerEl).setName("Summary Provider").setDesc("Choose the AI summarization service").addDropdown((dropdown) => {
       dropdown.addOption("openai-gpt4o", "OpenAI GPT-4o (Cloud)").addOption("ollama", "Ollama (Local)").addOption("gpt4all", "GPT4All (Local)").setValue(this.plugin.settings.summarizerProvider).onChange(async (value) => {
         this.plugin.settings.summarizerProvider = value;
         await this.plugin.saveSettings();
@@ -1648,8 +1648,8 @@ var VoiceNotesSettingTab = class extends import_obsidian4.PluginSettingTab {
     });
     const needsOpenAI = this.plugin.settings.transcriberProvider === "openai-whisper" || this.plugin.settings.summarizerProvider === "openai-gpt4o";
     if (needsOpenAI) {
-      new import_obsidian4.Setting(containerEl).setName("Cl\xE9 API OpenAI").setDesc("Requis pour les providers OpenAI (Whisper et/ou GPT-4o)").addText((text) => {
-        text.setPlaceholder("Entrez votre cl\xE9 API OpenAI");
+      new import_obsidian4.Setting(containerEl).setName("OpenAI API Key").setDesc("Required for OpenAI providers (Whisper and/or GPT-4o)").addText((text) => {
+        text.setPlaceholder("Enter your OpenAI API key");
         if (this.plugin.settings.openaiApiKey) {
           text.setValue("*".repeat(this.plugin.settings.openaiApiKey.length));
         } else {
@@ -1662,33 +1662,33 @@ var VoiceNotesSettingTab = class extends import_obsidian4.PluginSettingTab {
             await this.plugin.saveSettings();
           }
         });
-      }).addExtraButton((button) => button.setIcon("external-link").setTooltip("Obtenir une cl\xE9 API OpenAI").onClick(() => {
+      }).addExtraButton((button) => button.setIcon("external-link").setTooltip("Get OpenAI API Key").onClick(() => {
         window.open("https://platform.openai.com/api-keys", "_blank");
       }));
       containerEl.createEl("p", {
-        text: "\u{1F4A1} Besoin d'une cl\xE9 API ? Visitez la plateforme OpenAI ci-dessus pour cr\xE9er votre compte et obtenir votre cl\xE9 API.",
+        text: "\u{1F4A1} Need an API key? Visit the OpenAI platform above to create your account and get your API key.",
         cls: "help-text"
       });
     }
     if (this.plugin.settings.transcriberProvider === "whispercpp" || this.plugin.settings.transcriberProvider === "fasterwhisper" || this.plugin.settings.summarizerProvider === "ollama" || this.plugin.settings.summarizerProvider === "gpt4all") {
-      containerEl.createEl("h4", { text: "Configuration des Providers Locaux" });
+      containerEl.createEl("h4", { text: "Local Providers Configuration" });
       if (this.plugin.settings.summarizerProvider === "ollama") {
         containerEl.createEl("h5", { text: "Ollama" });
-        new import_obsidian4.Setting(containerEl).setName("Host Ollama").setDesc("Adresse du serveur Ollama").addText((text) => {
+        new import_obsidian4.Setting(containerEl).setName("Ollama Host").setDesc("Ollama server address").addText((text) => {
           text.setValue(this.plugin.settings.localProviders.ollama.host);
           text.onChange(async (value) => {
             this.plugin.settings.localProviders.ollama.host = value;
             await this.plugin.saveSettings();
           });
         });
-        new import_obsidian4.Setting(containerEl).setName("Port Ollama").setDesc("Port du serveur Ollama").addText((text) => {
+        new import_obsidian4.Setting(containerEl).setName("Ollama Port").setDesc("Ollama server port").addText((text) => {
           text.setValue(this.plugin.settings.localProviders.ollama.port.toString());
           text.onChange(async (value) => {
             this.plugin.settings.localProviders.ollama.port = parseInt(value) || 11434;
             await this.plugin.saveSettings();
           });
         });
-        new import_obsidian4.Setting(containerEl).setName("Mod\xE8le Ollama").setDesc("Nom du mod\xE8le \xE0 utiliser").addText((text) => {
+        new import_obsidian4.Setting(containerEl).setName("Ollama Model").setDesc("Model name to use").addText((text) => {
           text.setValue(this.plugin.settings.localProviders.ollama.model);
           text.onChange(async (value) => {
             this.plugin.settings.localProviders.ollama.model = value;
@@ -1698,14 +1698,14 @@ var VoiceNotesSettingTab = class extends import_obsidian4.PluginSettingTab {
       }
       if (this.plugin.settings.transcriberProvider === "whispercpp") {
         containerEl.createEl("h5", { text: "WhisperCpp" });
-        new import_obsidian4.Setting(containerEl).setName("Chemin binaire WhisperCpp").setDesc("Chemin vers l'ex\xE9cutable whisper.cpp").addText((text) => {
+        new import_obsidian4.Setting(containerEl).setName("WhisperCpp Binary Path").setDesc("Path to whisper.cpp executable").addText((text) => {
           text.setValue(this.plugin.settings.localProviders.whispercpp.binaryPath);
           text.onChange(async (value) => {
             this.plugin.settings.localProviders.whispercpp.binaryPath = value;
             await this.plugin.saveSettings();
           });
         });
-        new import_obsidian4.Setting(containerEl).setName("Chemin mod\xE8le WhisperCpp").setDesc("Chemin vers le fichier de mod\xE8le").addText((text) => {
+        new import_obsidian4.Setting(containerEl).setName("WhisperCpp Model Path").setDesc("Path to model file").addText((text) => {
           text.setValue(this.plugin.settings.localProviders.whispercpp.modelPath);
           text.onChange(async (value) => {
             this.plugin.settings.localProviders.whispercpp.modelPath = value;
@@ -1715,14 +1715,14 @@ var VoiceNotesSettingTab = class extends import_obsidian4.PluginSettingTab {
       }
       if (this.plugin.settings.transcriberProvider === "fasterwhisper") {
         containerEl.createEl("h5", { text: "FasterWhisper" });
-        new import_obsidian4.Setting(containerEl).setName("Chemin Python").setDesc("Chemin vers l'ex\xE9cutable Python").addText((text) => {
+        new import_obsidian4.Setting(containerEl).setName("Python Path").setDesc("Path to Python executable").addText((text) => {
           text.setValue(this.plugin.settings.localProviders.fasterwhisper.pythonPath);
           text.onChange(async (value) => {
             this.plugin.settings.localProviders.fasterwhisper.pythonPath = value;
             await this.plugin.saveSettings();
           });
         });
-        new import_obsidian4.Setting(containerEl).setName("Nom du mod\xE8le").setDesc("Nom du mod\xE8le FasterWhisper \xE0 utiliser").addText((text) => {
+        new import_obsidian4.Setting(containerEl).setName("Model Name").setDesc("FasterWhisper model name to use").addText((text) => {
           text.setValue(this.plugin.settings.localProviders.fasterwhisper.modelName);
           text.onChange(async (value) => {
             this.plugin.settings.localProviders.fasterwhisper.modelName = value;
@@ -1731,13 +1731,13 @@ var VoiceNotesSettingTab = class extends import_obsidian4.PluginSettingTab {
         });
       }
     }
-    containerEl.createEl("h3", { text: "\u{1F4DD} Personnalisation IA" });
+    containerEl.createEl("h3", { text: "\u{1F4DD} AI Customization" });
     containerEl.createEl("p", {
-      text: "Personnalisez le prompt utilis\xE9 pour g\xE9n\xE9rer les r\xE9sum\xE9s de vos enregistrements vocaux. Cela vous permet d'adapter le format de sortie et le focus \xE0 vos besoins sp\xE9cifiques.",
+      text: "Customize the prompt used to generate summaries of your voice recordings. This allows you to adapt the output format and focus to your specific needs.",
       cls: "setting-description"
     });
-    new import_obsidian4.Setting(containerEl).setName("Prompt de R\xE9sum\xE9 Personnalis\xE9").setDesc("Personnalisez le prompt envoy\xE9 \xE0 l'IA pour g\xE9n\xE9rer les r\xE9sum\xE9s").addTextArea((text) => {
-      text.setPlaceholder("Entrez votre prompt de r\xE9sum\xE9 personnalis\xE9...");
+    new import_obsidian4.Setting(containerEl).setName("Custom Summary Prompt").setDesc("Customize the prompt sent to AI for generating summaries").addTextArea((text) => {
+      text.setPlaceholder("Enter your custom summary prompt...");
       text.setValue(this.plugin.settings.customSummaryPrompt || DEFAULT_SUMMARY_PROMPT);
       text.inputEl.rows = 12;
       text.inputEl.addClass("custom-summary-prompt-textarea");
@@ -1745,32 +1745,32 @@ var VoiceNotesSettingTab = class extends import_obsidian4.PluginSettingTab {
         this.plugin.settings.customSummaryPrompt = value;
         await this.plugin.saveSettings();
       });
-    }).addExtraButton((button) => button.setIcon("reset").setTooltip("Restaurer le Prompt par D\xE9faut").onClick(async () => {
+    }).addExtraButton((button) => button.setIcon("reset").setTooltip("Reset to Default Prompt").onClick(async () => {
       this.plugin.settings.customSummaryPrompt = DEFAULT_SUMMARY_PROMPT;
       await this.plugin.saveSettings();
       this.display();
     }));
     containerEl.createEl("p", {
-      text: `\u{1F4A1} Le prompt doit inclure des instructions pour l'IA sur la fa\xE7on d'analyser et de r\xE9sumer les enregistrements vocaux. Utilisez "**Transcript:**" comme placeholder o\xF9 le transcript r\xE9el sera ins\xE9r\xE9.`,
+      text: '\u{1F4A1} The prompt should include instructions for the AI on how to analyze and summarize voice recordings. Use "**Transcript:**" as a placeholder where the actual transcript will be inserted.',
       cls: "help-text"
     });
     containerEl.createEl("h3", { text: "\u{1F6E1}\uFE0F Monitoring" });
     containerEl.createEl("p", {
-      text: "Configuration du monitoring d'erreurs avec GlitchTip pour am\xE9liorer la fiabilit\xE9 du plugin.",
+      text: "Error monitoring configuration with GlitchTip to improve plugin reliability.",
       cls: "setting-description"
     });
-    new import_obsidian4.Setting(containerEl).setName("Token GlitchTip").setDesc("Token de monitoring d'erreurs (configur\xE9 par d\xE9faut)").addText((text) => {
+    new import_obsidian4.Setting(containerEl).setName("GlitchTip Token").setDesc("Error monitoring token (configured by default)").addText((text) => {
       text.setValue(this.plugin.settings.glitchTipDsn);
       text.inputEl.type = "password";
       text.onChange(async (value) => {
         this.plugin.settings.glitchTipDsn = value;
         await this.plugin.saveSettings();
       });
-    }).addExtraButton((button) => button.setIcon("external-link").setTooltip("En savoir plus sur GlitchTip").onClick(() => {
+    }).addExtraButton((button) => button.setIcon("external-link").setTooltip("Learn more about GlitchTip").onClick(() => {
       window.open("https://glitchtip.com/", "_blank");
     }));
     containerEl.createEl("p", {
-      text: "\u{1F4A1} GlitchTip est un service open-source de suivi d'erreurs. Le token par d\xE9faut est configur\xE9 pour le monitoring automatique.",
+      text: "\u{1F4A1} GlitchTip is an open-source error tracking service. The default token is configured for automatic monitoring.",
       cls: "help-text"
     });
   }
