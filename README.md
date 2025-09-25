@@ -47,6 +47,7 @@ This will start the build process in watch mode.
 
 - [Product Specification](rules/product-spec.md) - Complete product overview and features
 - [Architecture Overview](rules/architecture-overview.md) - Technical architecture and code navigation guide
+- [Settings Structure](rules/SETTINGS_STRUCTURE.md) - Obsidian settings page structure and configuration
 - [Release Procedure](rules/RELEASE_PROCEDURE.md) - Development and release guidelines
 
 ## 🤝 Contributing
