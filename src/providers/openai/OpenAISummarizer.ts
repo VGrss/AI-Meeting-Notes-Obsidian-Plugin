@@ -10,6 +10,7 @@ import {
   SummarizationResult,
 } from '../types';
 import { ProviderError, ProviderErrorCode } from '../errors';
+import { requestUrl } from 'obsidian';
 
 export class OpenAISummarizer implements SummarizerProvider {
   id = 'openai-gpt4o';
@@ -34,14 +35,15 @@ export class OpenAISummarizer implements SummarizerProvider {
 
     try {
       // Test de connexion simple en listant les modèles
-      const response = await fetch('https://api.openai.com/v1/models', {
+      const response = await requestUrl({
+        url: 'https://api.openai.com/v1/models',
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
         },
       });
 
-      if (!response.ok) {
+      if (!response.status || response.status < 200 || response.status >= 300) {
         if (response.status === 401) {
           return {
             ok: false,
@@ -50,7 +52,7 @@ export class OpenAISummarizer implements SummarizerProvider {
         }
         return {
           ok: false,
-          details: `Erreur de connexion: ${response.status} ${response.statusText}`,
+          details: `Erreur de connexion: ${response.status}`,
         };
       }
 
@@ -101,7 +103,8 @@ export class OpenAISummarizer implements SummarizerProvider {
       // Utiliser le prompt personnalisé ou celui par défaut
       const prompt = opts?.customPrompt || this.customSummaryPrompt;
 
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await requestUrl({
+        url: 'https://api.openai.com/v1/chat/completions',
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -121,22 +124,21 @@ ${processedText}`
         })
       });
 
-      if (!response.ok) {
+      if (!response.status || response.status < 200 || response.status >= 300) {
         throw new ProviderError(
           ProviderErrorCode.PROCESSING_FAILED,
-          `Summary generation failed: ${response.statusText}`,
+          `Summary generation failed: ${response.status}`,
           {
             providerId: this.id,
             metadata: {
               httpStatus: response.status,
-              responseText: response.statusText,
               textLength: text.length
             }
           }
         );
       }
 
-      const result = await response.json();
+      const result = response.json;
       const summary = result.choices[0].message.content;
       
       // Log successful summary generation

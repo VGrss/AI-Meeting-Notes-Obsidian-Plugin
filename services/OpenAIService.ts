@@ -1,4 +1,5 @@
 import { ErrorTrackingService } from './ErrorTrackingService';
+import { requestUrl } from 'obsidian';
 
 /**
  * Service pour l'intégration avec les API OpenAI (Whisper et GPT-4o)
@@ -99,7 +100,8 @@ export class OpenAIService {
 			formData.append('file', audioBlob, 'recording.wav');
 			formData.append('model', 'whisper-1');
 
-			const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+			const response = await requestUrl({
+				url: 'https://api.openai.com/v1/audio/transcriptions',
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${this.apiKey}`,
@@ -107,7 +109,7 @@ export class OpenAIService {
 				body: formData
 			});
 
-			if (!response.ok) {
+			if (!response.status || response.status < 200 || response.status >= 300) {
 				const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
 				let errorMessage: string;
 				
@@ -121,14 +123,14 @@ export class OpenAIService {
 				} else if (response.status >= 500) {
 					errorMessage = `OpenAI service is temporarily unavailable (${response.status}).\n\nPlease try again in a few minutes.`;
 				} else {
-					errorMessage = `Transcription failed (${response.status}): ${response.statusText}`;
+					errorMessage = `Transcription failed (${response.status})`;
 				}
 				
 				const error = new Error(errorMessage);
 				this.errorTracker?.captureError(error, {
 					function: 'transcribeAudio',
 					httpStatus: response.status,
-					responseText: response.statusText,
+					responseText: response.status?.toString() || 'Unknown',
 					fileSizeMB: sizeMB,
 					audioBlobSize: audioBlob.size,
 					helpfulErrorHandling: true
@@ -136,7 +138,7 @@ export class OpenAIService {
 				throw error;
 			}
 
-			const result = await response.json();
+			const result = response.json;
 			
 			// Log successful transcription
 			this.errorTracker?.captureMessage('Audio transcription completed successfully', 'info', {
@@ -197,7 +199,8 @@ export class OpenAIService {
 				});
 			}
 
-			const response = await fetch('https://api.openai.com/v1/chat/completions', {
+			const response = await requestUrl({
+				url: 'https://api.openai.com/v1/chat/completions',
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${this.apiKey}`,
@@ -217,18 +220,18 @@ ${processedTranscript}`
 				})
 			});
 
-			if (!response.ok) {
-				const error = new Error(`Summary generation failed: ${response.statusText}`);
+			if (!response.status || response.status < 200 || response.status >= 300) {
+				const error = new Error(`Summary generation failed: ${response.status}`);
 				this.errorTracker?.captureError(error, {
 					function: 'generateSummary',
 					httpStatus: response.status,
-					responseText: response.statusText,
+					responseText: response.status?.toString() || 'Unknown',
 					transcriptLength: transcript.length
 				});
 				throw error;
 			}
 
-			const result = await response.json();
+			const result = response.json;
 			
 			// Log successful summary generation
 			this.errorTracker?.captureMessage('AI summary generated successfully', 'info', {
@@ -266,7 +269,8 @@ ${processedTranscript}`
 				throw error;
 			}
 
-			const response = await fetch('https://api.openai.com/v1/chat/completions', {
+			const response = await requestUrl({
+				url: 'https://api.openai.com/v1/chat/completions',
 				method: 'POST',
 				headers: {
 					'Authorization': `Bearer ${this.apiKey}`,
@@ -288,18 +292,18 @@ ${transcript}`
 				})
 			});
 
-			if (!response.ok) {
-				const error = new Error(`Topic generation failed: ${response.statusText}`);
+			if (!response.status || response.status < 200 || response.status >= 300) {
+				const error = new Error(`Topic generation failed: ${response.status}`);
 				this.errorTracker?.captureError(error, {
 					function: 'generateTopic',
 					httpStatus: response.status,
-					responseText: response.statusText,
+					responseText: response.status?.toString() || 'Unknown',
 					transcriptLength: transcript.length
 				});
 				throw error;
 			}
 
-			const result = await response.json();
+			const result = response.json;
 			const topic = result.choices[0].message.content.trim();
 			const cleanTopic = topic.replace(/^["']|["']$/g, '');
 			

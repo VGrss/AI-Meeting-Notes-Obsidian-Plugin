@@ -11,6 +11,7 @@ import {
   TranscriptionSegment,
 } from '../types';
 import { ProviderError, ProviderErrorCode } from '../errors';
+import { requestUrl } from 'obsidian';
 
 export class OpenAITranscriber implements TranscriberProvider {
   id = 'openai-whisper';
@@ -37,14 +38,15 @@ export class OpenAITranscriber implements TranscriberProvider {
 
     try {
       // Test de connexion simple en listant les modèles
-      const response = await fetch('https://api.openai.com/v1/models', {
+      const response = await requestUrl({
+        url: 'https://api.openai.com/v1/models',
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
         },
       });
 
-      if (!response.ok) {
+      if (!response.status || response.status < 200 || response.status >= 300) {
         if (response.status === 401) {
           return {
             ok: false,
@@ -53,7 +55,7 @@ export class OpenAITranscriber implements TranscriberProvider {
         }
         return {
           ok: false,
-          details: `Erreur de connexion: ${response.status} ${response.statusText}`,
+          details: `Erreur de connexion: ${response.status}`,
         };
       }
 
@@ -110,7 +112,8 @@ export class OpenAITranscriber implements TranscriberProvider {
         formData.append('language', opts.language);
       }
 
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      const response = await requestUrl({
+        url: 'https://api.openai.com/v1/audio/transcriptions',
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -118,7 +121,7 @@ export class OpenAITranscriber implements TranscriberProvider {
         body: formData
       });
 
-      if (!response.ok) {
+      if (!response.status || response.status < 200 || response.status >= 300) {
         const sizeMB = (audioBlob.size / (1024 * 1024)).toFixed(1);
         let errorMessage: string;
         
@@ -132,7 +135,7 @@ export class OpenAITranscriber implements TranscriberProvider {
         } else if (response.status >= 500) {
           errorMessage = `OpenAI service is temporarily unavailable (${response.status}).\n\nPlease try again in a few minutes.`;
         } else {
-          errorMessage = `Transcription failed (${response.status}): ${response.statusText}`;
+          errorMessage = `Transcription failed (${response.status})`;
         }
         
         throw new ProviderError(
@@ -142,14 +145,13 @@ export class OpenAITranscriber implements TranscriberProvider {
             providerId: this.id,
             metadata: {
               httpStatus: response.status,
-              responseText: response.statusText,
               fileSizeMB: sizeMB,
             }
           }
         );
       }
 
-      const result = await response.json();
+      const result = response.json;
       
       // Log successful transcription
       console.log('Audio transcription completed successfully:', {

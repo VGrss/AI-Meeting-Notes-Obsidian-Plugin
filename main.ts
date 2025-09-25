@@ -314,7 +314,8 @@ class VoiceNotesSettingTab extends PluginSettingTab {
 					.setIcon('external-link')
 					.setTooltip('Get OpenAI API Key')
 					.onClick(() => {
-						window.open('https://platform.openai.com/api-keys', '_blank');
+						// Utilisation de requestUrl pour la compatibilité multiplateforme
+						this.app.openExternal('https://platform.openai.com/api-keys');
 					}));
 
 			containerEl.createEl('p', {
